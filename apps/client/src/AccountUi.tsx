@@ -18,8 +18,14 @@ export function ProfileCard() {
         <CurrencyPill currency="coin" amount={profile.coins} />
       </div>
       <ProgressBar value={profile.xpIntoLevel / profile.xpForNext} label="XP to next level" />
-      <div style={small}>
-        {profile.xpIntoLevel} / {profile.xpForNext} XP
+      <div style={{ ...small, display: 'flex', justifyContent: 'space-between' }}>
+        <span>
+          {profile.xpIntoLevel} / {profile.xpForNext} XP
+        </span>
+        <span>
+          Duel rating {profile.rating}
+          {profile.season.rank !== null && ` · #${profile.season.rank}`}
+        </span>
       </div>
     </div>
   );

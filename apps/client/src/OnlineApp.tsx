@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { create } from 'zustand';
 import { DailyReward, ProfileCard, ShopButton } from './AccountUi';
 import { refreshProfile, rename, savedName, saveName, sessionToken, useAccount } from './account';
+import { LeaderboardButton, SeasonReward } from './RankedUi';
 import { OnlineGame, type JoinRequest, type OnlineStats } from './game/OnlineGame';
 import { Renderer } from './game/Renderer';
 
@@ -129,10 +130,10 @@ function Menu({ name, onName, onJoin }: { name: string; onName: (n: string) => v
           <Tabs items={MODES.map((m) => ({ value: m.id, label: m.name }))} value={mode.id} onChange={pickMode} />
           <div style={{ fontSize: token('font.sizeSm'), color: token('color.textMuted'), textAlign: 'center' }}>{mode.description}</div>
         </div>
-        <Button onClick={() => onJoin({ kind: 'quick', room: mode.room })} style={{ fontSize: token('font.sizeLg') }}>
+        <Button onClick={() => onJoin({ kind: 'quick', mode: mode.id })} style={{ fontSize: token('font.sizeLg') }}>
           Quick play
         </Button>
-        <Button variant="secondary" onClick={() => onJoin({ kind: 'create', room: mode.room })}>
+        <Button variant="secondary" onClick={() => onJoin({ kind: 'create', mode: mode.id })}>
           Create private room
         </Button>
         <form
@@ -154,8 +155,10 @@ function Menu({ name, onName, onJoin }: { name: string; onName: (n: string) => v
           </Button>
         </form>
         <DailyReward />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: token('space.sm') }}>
+        <SeasonReward />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: token('space.sm') }}>
           <ShopButton />
+          <LeaderboardButton />
           <Button variant="secondary" onClick={() => (location.hash = '')}>
             Sandbox
           </Button>
@@ -237,6 +240,24 @@ function PhaseOverlay({ game, onLeave }: { game: OnlineGame | null; onLeave: () 
       </Center>
     );
   }
+  if (s.connection === 'searching') {
+    return (
+      <Center>
+        <div style={title}>Finding an opponent…</div>
+        {s.queue && (
+          <div style={muted}>
+            Your rating {s.queue.rating} · {s.queue.seconds}s
+            {s.queue.seconds >= 10 && <div>Widening the search to more ratings</div>}
+          </div>
+        )}
+        <div style={{ marginTop: token('space.lg') }}>
+          <Button variant="secondary" onClick={onLeave}>
+            Cancel
+          </Button>
+        </div>
+      </Center>
+    );
+  }
   if (s.connection !== 'connected') {
     return (
       <Center>
@@ -279,6 +300,12 @@ function PhaseOverlay({ game, onLeave }: { game: OnlineGame | null; onLeave: () 
             <div style={{ margin: `${token('space.md')} 0`, fontFamily: token('font.display'), fontSize: token('font.sizeLg') }}>
               +{s.rewards.xp} XP · +{s.rewards.coins} coins
               {s.rewards.levelAfter > s.rewards.levelBefore && <div>Level up! Level {s.rewards.levelAfter}</div>}
+              {s.rewards.rating && (
+                <div>
+                  Rating {s.rewards.rating.after} ({s.rewards.rating.after >= s.rewards.rating.before ? '+' : ''}
+                  {s.rewards.rating.after - s.rewards.rating.before})
+                </div>
+              )}
             </div>
           )}
           <div style={muted}>

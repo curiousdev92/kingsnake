@@ -2,6 +2,7 @@ import { Server } from '@colyseus/core';
 import { Client, type Room } from '@colyseus/sdk';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import {
+  MATCHED_MESSAGE,
   MATCH_MESSAGE,
   Msg,
   SETTINGS_MESSAGE,
@@ -18,15 +19,23 @@ import {
 import { signPlayerToken } from '@snake/auth';
 import type { Grant, MatchReport } from '@snake/meta';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { MODES } from '@snake/game-modes';
+import { MODES, queueRoomName } from '@snake/game-modes';
 import { ArenaRoom, ROOM_SIZE, timing } from '../src/ArenaRoom';
 import type { MetaService } from '../src/meta';
+import { QueueRoom } from '../src/QueueRoom';
 
 // Fake API: one known account, and a log of reported matches.
 const ACCOUNT = '11111111-2222-3333-4444-555555555555';
+const ACCOUNT2 = '22222222-3333-4444-5555-666666666666';
+const ACCOUNT3 = '33333333-4444-5555-6666-777777777777';
+const ACCOUNTS: Record<string, { name: string; skin: string; rating: number }> = {
+  [ACCOUNT]: { name: 'Pro', skin: 'ember', rating: 1000 },
+  [ACCOUNT2]: { name: 'Rival', skin: 'classic', rating: 1050 },
+  [ACCOUNT3]: { name: 'Champ', skin: 'classic', rating: 2000 },
+};
 const reports: MatchReport[] = [];
 const fakeMeta: MetaService = {
-  lookupPlayer: async (id) => (id === ACCOUNT ? { name: 'Pro', skin: 'ember' } : null),
+  lookupPlayer: async (id) => ACCOUNTS[id] ?? null,
   reportMatch: async (report) => {
     reports.push(report);
     return Object.fromEntries(report.results.map((r) => [r.playerId, { xp: 42, coins: 7, levelBefore: 1, levelAfter: 1 }]));
@@ -41,7 +50,11 @@ beforeAll(async () => {
   ArenaRoom.meta = fakeMeta;
   Object.assign(timing, { lobbyWaitMs: 600, fullLobbyMs: 200, countdownMs: 300, resultsMs: 500 });
   server = new Server({ transport: new WebSocketTransport() });
-  for (const mode of MODES) server.define(mode.room, ArenaRoom);
+  for (const mode of MODES) {
+    server.define(mode.room, ArenaRoom);
+    const queue = queueRoomName(mode);
+    if (queue) server.define(queue, QueueRoom);
+  }
   await server.listen(PORT);
 });
 
@@ -72,6 +85,14 @@ function record(room: Room): Recorder {
 
 const quick = async (name: string) => record(await new Client(URL).joinOrCreate('arena', { name }));
 const createPrivate = async (name: string) => record(await new Client(URL).create('arena', { name, private: true }));
+/** Queues for a ranked duel and joins the room the queue matches us into. */
+async function viaQueue(options: Record<string, unknown>): Promise<Recorder> {
+  const client = new Client(URL);
+  const queue = await client.joinOrCreate('duel-queue', options);
+  const seat = await new Promise<Parameters<Client['consumeSeatReservation']>[0]>((res) => queue.onMessage(MATCHED_MESSAGE, res));
+  await queue.leave();
+  return record(await client.consumeSeatReservation(seat));
+}
 const joinCode = async (code: string, name: string) => record(await new Client(URL).joinById(code, { name }));
 
 async function until(cond: () => boolean, timeoutMs: number): Promise<void> {
@@ -202,8 +223,25 @@ describe('accounts and rewards', () => {
     expect(rewards[0]).toEqual({ xp: 42, coins: 7, levelBefore: 1, levelAfter: 1 });
     const report = reports.at(-1)!;
     expect(report.totalPlayers).toBe(2);
+    expect(report.ranked).toBe(false); // private rooms are never ranked
     expect(report.results).toEqual([{ playerId: ACCOUNT, placement: 2, kills: 0, survivalMs: expect.any(Number) }]);
     await room.leave();
+  }, 15000);
+
+  it('reports queued duels between two accounts as ranked', async () => {
+    const [a, b] = await Promise.all([viaQueue({ token: await signPlayerToken(ACCOUNT) }), viaQueue({ token: await signPlayerToken(ACCOUNT2) })]);
+    expect(b.room.roomId).toBe(a.room.roomId);
+    await until(() => a.last()?.phase === 'playing', 5000);
+    // Both drive straight ahead with boost until the arena or each other ends it.
+    const go = setInterval(() => {
+      for (const r of [a, b]) r.room.sendBytes(Msg.Input, encodeInput({ seq: Date.now(), targetAngle: 0, boost: true }));
+    }, 1000 / 30);
+    await until(() => reports.some((r) => r.results.some((x) => x.playerId === ACCOUNT2)), 10000);
+    clearInterval(go);
+    const report = reports.find((r) => r.results.some((x) => x.playerId === ACCOUNT2))!;
+    expect(report.ranked).toBe(true);
+    expect(report.results.map((r) => r.playerId).sort()).toEqual([ACCOUNT, ACCOUNT2]);
+    for (const r of [a, b]) await r.room.leave();
   }, 15000);
 
   it('treats a bad token as anonymous: plays, but is never reported', async () => {
@@ -216,25 +254,28 @@ describe('accounts and rewards', () => {
 });
 
 describe('duel', () => {
-  it('matches two duel players together, apart from free-for-all, with no bots', async () => {
-    const duel = async (name: string) => record(await new Client(URL).joinOrCreate('duel', { name }));
-    const a = await duel('Ann');
-    const b = await duel('Ben');
-    const c = await duel('Cat');
-    const f = await quick('Fay');
+  it('matches queued players into a duel room with no bots, and refuses to skip the queue', async () => {
+    const [a, b] = await Promise.all([viaQueue({ name: 'Ann' }), viaQueue({ name: 'Ben' })]);
     expect(b.room.roomId).toBe(a.room.roomId);
-    // The duel room is full, so the third duelist gets a fresh one; free-for-all is separate.
-    expect(c.room.roomId).not.toBe(a.room.roomId);
-    expect(f.room.roomId).not.toBe(a.room.roomId);
-    expect(f.room.roomId).not.toBe(c.room.roomId);
-
-    await until(() => a.last()?.phase === 'playing', 3000);
+    await until(() => a.last()?.phase === 'playing', 5000);
     expect(a.last().lobby.mode).toBe('duel');
-    expect(a.last().lobby.maxPlayers).toBe(2);
     expect(a.last().roster.length).toBe(2);
     expect(a.last().roster.some((r) => r.isBot)).toBe(false);
     expect(a.last().config.headToHead).toBe('bigger-wins');
-    for (const r of [a, b, c, f]) await r.room.leave();
+    // Ranked rooms can't be created or found without the queue.
+    await expect(new Client(URL).joinOrCreate('duel', { name: 'Sneaky' })).rejects.toThrow();
+    for (const r of [a, b]) await r.room.leave();
+  });
+
+  it('keeps far-apart ratings waiting at first', async () => {
+    const client = (account: string) => new Client(URL).joinOrCreate('duel-queue', { token: account });
+    const low = await client(await signPlayerToken(ACCOUNT));
+    const high = await client(await signPlayerToken(ACCOUNT3));
+    let matched = false;
+    for (const q of [low, high]) q.onMessage(MATCHED_MESSAGE, () => (matched = true));
+    await sleep(1500);
+    expect(matched).toBe(false);
+    await Promise.all([low.leave(), high.leave()]);
   });
 
   it('private duel rooms cap the host to one bot', async () => {

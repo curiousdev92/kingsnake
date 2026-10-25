@@ -8,5 +8,6 @@ export const ffa: GameMode = {
   description: 'Eight snakes, last one alive wins',
   maxPlayers: 8,
   maxPrivateSnakes: 16,
+  ranked: false,
   sim: {},
 };

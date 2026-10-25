@@ -20,6 +20,11 @@ export function modeForRoom(room: string): GameMode {
   return MODES.find((m) => m.room === room) ?? DEFAULT_MODE;
 }
 
+/** Ranked modes matchmake public games through a rating queue room; others have none. */
+export function queueRoomName(mode: GameMode): string | null {
+  return mode.ranked ? `${mode.room}-queue` : null;
+}
+
 export function modeConfig(mode: GameMode, overrides: Partial<SimConfig> = {}): SimConfig {
   return makeConfig({ ...mode.sim, ...overrides });
 }

@@ -243,6 +243,17 @@ export interface MatchMsg {
 /** Server -> client JSON message at match end with the account's rewards (a @snake/meta Grant). */
 export const REWARDS_MESSAGE = 'rewards';
 
+/** Ranked queue, server -> client JSON: you're waiting at this rating (QueueMsg). */
+export const QUEUE_MESSAGE = 'queue';
+/** Ranked queue, server -> client: an opponent was found; the payload is a Colyseus seat reservation to consume. */
+export const MATCHED_MESSAGE = 'matched';
+
+export interface QueueMsg {
+  rating: number;
+  /** Players in the queue when you joined. */
+  waiting: number;
+}
+
 /** Client -> server JSON messages for private-room hosts. */
 export const START_MESSAGE = 'start';
 export const SETTINGS_MESSAGE = 'settings';

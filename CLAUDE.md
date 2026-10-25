@@ -75,12 +75,19 @@ The server is authoritative. Hot-path traffic is custom binary over Colyseus `se
 - `packages/meta` is pure shared data and rules: the skin catalog (`SKINS`; a skin is a colour palette until atlases exist), the level curve, `matchReward`, the daily streak rules, the `Profile`/`Grant`/`MatchReport` types and `sanitizeName`. The API, game-server and client all use it, so prices and formulas live in one place.
 - `packages/auth`: HS256 player tokens (`jose`), signed by the API and verified by both the API and the game-server with `AUTH_SECRET`. `INTERNAL_KEY` guards server-to-server calls. Both have dev defaults and throw in production if unset.
 - `apps/api` (Fastify): `buildApp` in `app.ts` holds the routes and `players.ts` the domain logic. The routes:
-  - `POST /auth/guest`, `GET`/`PATCH /me`, `POST /me/daily`, `GET /shop`, `POST /shop/buy`, `POST /me/equip`.
+  - `POST /auth/guest`, `GET`/`PATCH /me`, `POST /me/daily`, `POST /me/season-reward`, `GET /leaderboard`, `GET /shop`, `POST /shop/buy`, `POST /me/equip`.
   - Game-server only, behind `x-internal-key`: `GET /internal/players/:id` and `POST /internal/match-results`.
 - Only guest accounts exist. A future Google/Apple/Supabase sign-in should exchange the provider token for the same player token, so the game-server never sees providers.
 - Database: plain SQL through the small `Db` interface (`db.ts`), with append-only `MIGRATIONS`. It is real Postgres via `pg` when `DATABASE_URL` is set, otherwise embedded PGlite (Postgres in WASM) at `apps/api/.data/pglite` (gitignored); tests use in-memory PGlite. Select `date` columns `::text` (driver Date parsing is timezone-dependent). Money paths (`buy`, `claimDaily`, `recordMatch`) run in transactions with `SELECT … FOR UPDATE`.
 - Rewards are server-authoritative. At match end `ArenaRoom.reportResults` sends placements, kills and survival (from `Match.results()`) for account holders to the API through `ArenaRoom.meta` (a `MetaService`; tests swap in a fake). The API grants XP and coins at most once per `(matchId, playerId)`. The game-server forwards each grant as a `'rewards'` message. Players who left mid-match are still paid.
 - Game-server join: `onAuth` verifies `options.token` (a bad or missing token means an anonymous player, never a rejection). `onJoin` looks up the account's name and equipped skin. Skins travel in `RosterEntry.skin`; bots get random ones. If the API is down, everyone plays anonymously.
+
+### Game modes, ranked queue and seasons
+- `packages/game-modes`: a `GameMode` is data (`room` name, `maxPlayers`, `maxPrivateSnakes`, `ranked`, `sim` overrides for `SimConfig`). A new mode is one file plus a line in `MODES`. Rule hooks (per-tick, win checks) don't exist yet; add them to `GameMode` and game-core's `step` when a mode needs different rules.
+- Each mode has its own Colyseus room name (`'arena'` is free-for-all, `'duel'`), and `ArenaRoom` derives the mode from `this.roomName`, never from client options. Using one name with `filterBy(['mode'])` let clients that omitted `mode` land in duel rooms.
+- Ranked modes (`mode.ranked`) matchmake public games through `QueueRoom` (`<room>-queue`, e.g. `'duel-queue'`). It pairs by rating every 500 ms (`pairPlayers` in `matchmaking.ts`: closest rating within a window that widens with waiting time, anyone after 30 s), creates the match room with `{ queued: QUEUE_SECRET }` and sends each player a seat reservation (`'matched'`), which the client consumes. Public ranked rooms refuse creation without the secret and are `setPrivate` so `joinOrCreate` can't find them. Private rooms of a ranked mode work normally and are never rated.
+- A match is reported `ranked` only when it is a public ranked room with exactly two snakes that are both account holders. The API then applies Elo (`@snake/meta` `rating.ts`, K = 32, floor 100) in the same transaction as the rewards, idempotently.
+- Seasons (`@snake/meta` `season.ts`) are UTC calendar months (`YYYY-MM`). Ratings live in `season_ratings`, one row per season and player, created on their first ranked match at a soft reset halfway between last season's rating and 1000. Last season's reward (coins by rating tier) is offered in `Profile.seasonReward` and claimed once with `POST /me/season-reward`. `GET /leaderboard?season=` returns the top 50 plus the viewer's own line. Testing ranked in two tabs needs two accounts: tabs share `snake.token`, and a duel against yourself is never rated.
 
 ### apps/client: Pixi + React shell
 - `account.ts` holds the account state (Zustand `useAccount`): it creates a guest on first launch and keeps the token in localStorage (`snake.token`). The game stays playable when the API is unreachable (`status: 'offline'`). `AccountUi.tsx` has the profile card (level, XP bar, coins), the daily reward and the shop modal. `Renderer.setSkins(map)` paints snakes by skin palette.
@@ -92,6 +99,6 @@ The server is authoritative. Hot-path traffic is custom binary over Colyseus `se
 
 ## Constraints from PLAN.md
 - `game-core`, `netcode` and `protocol` must not depend on the transport (Colyseus is only in `apps/game-server` and `OnlineGame.ts`). If Colyseus fights the custom netcode, PLAN.md allows replacing it with a thin `ws` server.
-- Planned but not yet created: `packages/game-modes` (a new game mode should be one file there), Redis (leaderboards and sessions), real sign-in providers, missions and season pass.
+- Planned but not yet created: Redis (sessions; leaderboards run on Postgres until they need it), real sign-in providers, missions and season pass. WebTransport is out of scope.
 - Cosmetics only, no pay-to-win. Rewards are granted server-side; the client never claims them.
 - Original art only. Snake skins are data (atlas + config), not code.

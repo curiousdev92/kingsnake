@@ -1,4 +1,4 @@
-import type { Profile } from '@snake/meta';
+import type { Leaderboard, Profile } from '@snake/meta';
 import { create } from 'zustand';
 
 /**
@@ -108,6 +108,17 @@ export async function claimDaily(): Promise<number> {
   const res = await call<{ coins: number; profile: Profile }>('POST', '/me/daily');
   setProfile(res.profile);
   return res.coins;
+}
+
+export async function claimSeasonReward(): Promise<number> {
+  const res = await call<{ coins: number; profile: Profile }>('POST', '/me/season-reward');
+  setProfile(res.profile);
+  return res.coins;
+}
+
+/** A season's leaderboard (default: the current one); includes your own line when signed in. */
+export function fetchLeaderboard(seasonId?: string): Promise<Leaderboard> {
+  return call<Leaderboard>('GET', seasonId ? `/leaderboard?season=${encodeURIComponent(seasonId)}` : '/leaderboard');
 }
 
 export async function buySkin(itemId: string): Promise<void> {

@@ -1,10 +1,13 @@
 import { Client, type Room } from '@colyseus/sdk';
 import { makeConfig } from '@snake/game-core';
+import { getMode, queueRoomName } from '@snake/game-modes';
 import type { Grant } from '@snake/meta';
 import { AdaptiveDelay, ClockSync, NetworkSimulator, Predictor, RemoteWorld, type NetConditions, type ViewSnake } from '@snake/netcode';
 import {
   MATCH_MESSAGE,
   Msg,
+  MATCHED_MESSAGE,
+  QUEUE_MESSAGE,
   REWARDS_MESSAGE,
   SETTINGS_MESSAGE,
   START_MESSAGE,
@@ -14,6 +17,7 @@ import {
   encodeInput,
   encodePing,
   type MatchMsg,
+  type QueueMsg,
   type LobbyInfo,
   type MatchPhase,
   type SnapshotMsg,
@@ -28,8 +32,8 @@ const NET_TIMER_MS = 5;
 const PING_INTERVAL_MS = 1000;
 const STATS_INTERVAL_MS = 100;
 
-/** How to get into a room: matchmaking or a new private room (by mode room name), or a private room's code. */
-export type JoinRequest = { kind: 'quick'; room: string } | { kind: 'create'; room: string } | { kind: 'code'; code: string };
+/** How to get into a room: matchmaking or a new private room (by mode id), or a private room's code. */
+export type JoinRequest = { kind: 'quick'; mode: string } | { kind: 'create'; mode: string } | { kind: 'code'; code: string };
 
 export interface OnlineOptions {
   url: string;
@@ -42,7 +46,10 @@ export interface OnlineOptions {
 }
 
 export interface OnlineStats {
-  connection: 'connecting' | 'connected' | 'closed' | 'error';
+  /** 'searching': waiting in a ranked queue for an opponent (see `queue`). */
+  connection: 'connecting' | 'searching' | 'connected' | 'closed' | 'error';
+  /** While searching: your rating and seconds waited. */
+  queue: { rating: number; seconds: number } | null;
   error: string | null;
   phase: MatchPhase;
   /** Seconds left in countdown/results, or null. */
@@ -105,6 +112,8 @@ export class OnlineGame {
   private rewards: Grant | null = null;
   private lastSample: { mass: number; alive: number; you: boolean; extrapolating: boolean } = { mass: 0, alive: 0, you: false, extrapolating: false };
   private connection: OnlineStats['connection'] = 'connecting';
+  private queueRoom: Room | null = null;
+  private queueInfo: { rating: number; since: number } | null = null;
   private error: string | null = null;
   // Diagnostics, counted over the last second.
   private bytesWindow: { t: number; bytes: number; snapshot: boolean }[] = [];
@@ -152,12 +161,16 @@ export class OnlineGame {
       const client = new Client(this.opts.url);
       const join = this.opts.join;
       const options = { name: this.opts.name, token: this.opts.token ?? undefined };
-      const room =
-        join.kind === 'quick'
-          ? await client.joinOrCreate(join.room, options)
+      const mode = join.kind === 'code' ? null : getMode(join.mode);
+      const queue = join.kind === 'quick' && mode ? queueRoomName(mode) : null;
+      const room = queue
+        ? await this.searchOpponent(client, queue, options)
+        : join.kind === 'quick'
+          ? await client.joinOrCreate(mode!.room, options)
           : join.kind === 'create'
-            ? await client.create(join.room, { ...options, private: true })
+            ? await client.create(mode!.room, { ...options, private: true })
             : await client.joinById(join.code, options);
+      if (!room) return;
       if (this.destroyed) {
         void room.leave();
         return;
@@ -327,6 +340,7 @@ export class OnlineGame {
     const serverNow = this.clock.serverNow(now);
     this.onStats({
       connection: this.connection,
+      queue: this.queueInfo && { rating: this.queueInfo.rating, seconds: Math.floor((now - this.queueInfo.since) / 1000) },
       error: this.error,
       phase: m?.phase ?? 'waiting',
       phaseSecondsLeft: m?.phaseEndsAt != null && this.clock.synced ? Math.max(0, Math.ceil((m.phaseEndsAt - serverNow) / 1000)) : null,
@@ -351,8 +365,31 @@ export class OnlineGame {
     });
   }
 
+  /**
+   * Ranked: waits in the mode's queue until it pairs us by rating, then takes the seat
+   * it reserved in the match room. Null if the game was closed while searching.
+   */
+  private async searchOpponent(client: Client, queueName: string, options: object): Promise<Room | null> {
+    const queue = await client.joinOrCreate(queueName, options);
+    this.queueRoom = queue;
+    this.connection = 'searching';
+    const since = performance.now();
+    const seat = await new Promise<Parameters<Client['consumeSeatReservation']>[0]>((resolve, reject) => {
+      queue.onMessage(QUEUE_MESSAGE, (m: QueueMsg) => (this.queueInfo = { rating: m.rating, since }));
+      queue.onMessage(MATCHED_MESSAGE, resolve);
+      queue.onLeave(() => reject(new Error('Lost the matchmaking queue')));
+    });
+    this.queueRoom = null;
+    this.queueInfo = null;
+    void queue.leave();
+    if (this.destroyed) return null;
+    this.connection = 'connecting';
+    return client.consumeSeatReservation(seat);
+  }
+
   destroy(): void {
     this.destroyed = true;
+    void this.queueRoom?.leave();
     this.renderer.app.ticker.remove(this.onTick);
     for (const t of this.timers) clearInterval(t);
     this.player.destroy();

@@ -1,5 +1,5 @@
 import { signPlayerToken } from '@snake/auth';
-import { STARTING_COINS, dailyReward, getSkin, type Profile } from '@snake/meta';
+import { START_RATING, STARTING_COINS, dailyReward, getSkin, type Profile } from '@snake/meta';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app';
@@ -157,9 +157,90 @@ describe('match results (internal)', () => {
     expect((await send({ matchId: '', results: [] })).statusCode).toBe(400);
   });
 
+  it('rates ranked duels once, zero-sum, and leaves unranked matches alone', async () => {
+    const a = await guest('Winner');
+    const b = await guest('Loser');
+    expect(a.profile.rating).toBe(START_RATING);
+    const duel = (matchId: string, ranked: boolean) => ({
+      matchId,
+      totalPlayers: 2,
+      ranked,
+      results: [
+        { playerId: b.profile.id, placement: 2, kills: 0, survivalMs: 30_000 },
+        { playerId: a.profile.id, placement: 1, kills: 1, survivalMs: 40_000 },
+      ],
+    });
+    const grants = (await send(duel('duel-1', true))).json().grants;
+    expect(grants[a.profile.id].rating).toEqual({ before: 1000, after: 1016 });
+    expect(grants[b.profile.id].rating).toEqual({ before: 1000, after: 984 });
+
+    // A retry reports the same change and rates nothing again.
+    const replay = (await send(duel('duel-1', true))).json().grants;
+    expect(replay[a.profile.id].rating).toEqual({ before: 1000, after: 1016 });
+    expect(((await app.inject({ url: '/me', headers: authed(a.token) })).json() as Profile).rating).toBe(1016);
+
+    const unranked = (await send(duel('duel-2', false))).json().grants;
+    expect(unranked[a.profile.id].rating).toBeUndefined();
+    expect(((await app.inject({ url: '/me', headers: authed(b.token) })).json() as Profile).rating).toBe(984);
+  });
+
   it('serves public player info to the game-server', async () => {
     const { profile } = await guest('Shown');
     const res = await app.inject({ url: `/internal/players/${profile.id}`, headers: { 'x-internal-key': INTERNAL } });
-    expect(res.json()).toEqual({ id: profile.id, name: 'Shown', skin: 'classic' });
+    expect(res.json()).toEqual({ id: profile.id, name: 'Shown', skin: 'classic', rating: START_RATING });
+  });
+});
+
+describe('seasons and leaderboard', () => {
+  const duel = (matchId: string, winner: string, loser: string) =>
+    app.inject({
+      method: 'POST',
+      url: '/internal/match-results',
+      headers: { 'x-internal-key': INTERNAL },
+      payload: {
+        matchId,
+        totalPlayers: 2,
+        ranked: true,
+        results: [
+          { playerId: winner, placement: 1, kills: 1, survivalMs: 40_000 },
+          { playerId: loser, placement: 2, kills: 0, survivalMs: 30_000 },
+        ],
+      },
+    });
+  const me = async (token: string) => (await app.inject({ url: '/me', headers: authed(token) })).json() as Profile;
+
+  it('ranks a season, then soft-resets and pays its reward once', async () => {
+    const saved = clock;
+    clock = new Date('2027-03-10T12:00:00Z'); // a season no other test touches
+    const a = await guest('Ace');
+    const b = await guest('Bea');
+    expect((await duel('s-1', a.profile.id, b.profile.id)).statusCode).toBe(200);
+
+    const board = (await app.inject({ url: '/leaderboard', headers: authed(b.token) })).json();
+    expect(board.season.id).toBe('2027-03');
+    expect(board.top.map((e: { name: string; rating: number; rank: number }) => [e.name, e.rating, e.rank])).toEqual([
+      ['Ace', 1016, 1],
+      ['Bea', 984, 2],
+    ]);
+    expect(board.you).toMatchObject({ name: 'Bea', you: true });
+    expect((await me(a.token)).season).toMatchObject({ rating: 1016, wins: 1, losses: 0, rank: 1 });
+    expect((await me(a.token)).seasonReward).toBeNull();
+
+    // Next season: ratings soft-reset halfway to 1000, and last season's reward is waiting.
+    clock = new Date('2027-04-02T12:00:00Z');
+    const next = await me(a.token);
+    expect(next.season).toMatchObject({ rating: 1008, wins: 0, rank: null });
+    expect(next.seasonReward).toMatchObject({ tier: 'Bronze', coins: 60, standing: { rating: 1016, rank: 1 } });
+    const claim = await app.inject({ method: 'POST', url: '/me/season-reward', headers: authed(a.token) });
+    expect(claim.json().coins).toBe(60);
+    expect(claim.json().profile.coins).toBe(next.coins + 60);
+    expect(claim.json().profile.seasonReward).toBeNull();
+    expect((await app.inject({ method: 'POST', url: '/me/season-reward', headers: authed(a.token) })).statusCode).toBe(409);
+
+    // Old seasons stay readable; the new one is empty until someone plays.
+    expect((await app.inject({ url: '/leaderboard?season=2027-03' })).json().top).toHaveLength(2);
+    expect((await app.inject({ url: '/leaderboard' })).json()).toMatchObject({ top: [], you: null });
+    expect((await app.inject({ url: '/leaderboard?season=bogus' })).statusCode).toBe(400);
+    clock = saved;
   });
 });

@@ -1,10 +1,11 @@
 import { timingSafeEqual } from 'node:crypto';
 import cors from '@fastify/cors';
 import { signPlayerToken, verifyPlayerToken } from '@snake/auth';
-import { SKINS, type MatchReport } from '@snake/meta';
+import { SKINS, seasonAt, seasonById, type MatchReport } from '@snake/meta';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import type { Db } from './db';
 import { ApiError, buy, claimDaily, createGuest, equip, getProfile, publicPlayer, recordMatch, rename } from './players';
+import { claimSeasonReward, leaderboard } from './seasons';
 
 export interface AppOptions {
   db: Db;
@@ -76,6 +77,25 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     return { coins, profile: await getProfile(db, id, now()) };
   });
 
+  app.post('/me/season-reward', async (req) => {
+    const id = await playerOf(req);
+    const coins = await claimSeasonReward(db, seasonAt(now()), id);
+    return { coins, profile: await getProfile(db, id, now()) };
+  });
+
+  // ---- ranked ----
+
+  /** A season's top 50 (`?season=YYYY-MM`, default current) plus, when signed in, your own line. */
+  app.get('/leaderboard', async (req) => {
+    const query = req.query as { season?: string };
+    const season = query.season === undefined ? seasonAt(now()) : seasonById(query.season);
+    if (!season) throw new ApiError(400, 'invalid_season', 'Season ids look like 2026-10');
+    const header = req.headers.authorization ?? '';
+    // Signed-in viewers also get their own line; a bad token just means no line.
+    const viewer = header.startsWith('Bearer ') ? await verifyPlayerToken(header.slice(7), authSecret) : null;
+    return { season, ...(await leaderboard(db, season, viewer)) };
+  });
+
   // ---- shop ----
 
   app.get('/shop', async () => ({ skins: SKINS }));
@@ -96,14 +116,14 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
 
   app.get('/internal/players/:id', async (req) => {
     requireInternal(req);
-    const player = await publicPlayer(db, (req.params as { id: string }).id);
+    const player = await publicPlayer(db, (req.params as { id: string }).id, now());
     if (!player) throw new ApiError(404, 'player_not_found', 'Player not found');
     return player;
   });
 
   app.post('/internal/match-results', async (req) => {
     requireInternal(req);
-    return { grants: await recordMatch(db, parseReport(body(req))) };
+    return { grants: await recordMatch(db, parseReport(body(req)), now()) };
   });
 
   return app;
@@ -120,6 +140,7 @@ function parseReport(b: Record<string, unknown>): MatchReport {
   return {
     matchId: b.matchId,
     totalPlayers: int(b.totalPlayers, 'totalPlayers'),
+    ranked: b.ranked === true,
     results: b.results.map((r: Record<string, unknown>) => {
       if (typeof r?.playerId !== 'string') throw bad('playerId');
       return { playerId: r.playerId, placement: int(r.placement, 'placement'), kills: int(r.kills, 'kills'), survivalMs: int(r.survivalMs, 'survivalMs') };

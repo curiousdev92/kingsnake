@@ -14,6 +14,8 @@ export interface GameMode {
   description: string;
   /** Snakes per match: public rooms fill up to this with bots, and it caps humans per room. */
   maxPlayers: number;
+  /** Public matches between two account holders change their rating. Private rooms never do. */
+  ranked: boolean;
   /** Private rooms: humans plus bots the host may add. */
   maxPrivateSnakes: number;
   /** Overrides on top of game-core's defaults. */

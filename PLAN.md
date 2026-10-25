@@ -27,7 +27,7 @@ Priorities: clean, maintainable, buttery smooth, beautiful and rewarding.
 | Hosting | Docker on Fly.io, multi-region |
 | Tooling | pnpm + Turborepo, Vitest, Playwright, GitHub Actions |
 
-Transport starts as WebSocket (Slither.io itself uses it). If mobile networks cause stalls, evaluate WebTransport (unreliable datagrams) later. Only the transport layer in `protocol`/`netcode` would change.
+Transport is WebSocket (Slither.io itself uses it). WebTransport is out of scope.
 
 Fallback note: if custom snapshot netcode fights the Colyseus framework, replace Colyseus with a thin `ws`/uWebSockets.js server plus our own room manager. `game-core`, `netcode` and `protocol` do not change.
 
@@ -146,7 +146,7 @@ How:
 6. Auth, profiles, rewards, shop
 7. Capacitor builds, mobile controls, haptics, then polish and effects
 8. Real art: author skins and atlases, plug in via the manifest
-9. Extra modes, ranked, seasons; evaluate WebTransport
+9. Extra modes, ranked, seasons
 
 ## 11. First task for Claude Code
 

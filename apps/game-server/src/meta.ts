@@ -1,10 +1,10 @@
 import { internalKey } from '@snake/auth';
-import type { Grant, MatchReport } from '@snake/meta';
+import { START_RATING, type Grant, type MatchReport } from '@snake/meta';
 
 /** What the game-server needs from the meta API. Swappable for tests. */
 export interface MetaService {
-  /** Display name and equipped skin of an account, or null if unknown/unreachable. */
-  lookupPlayer(playerId: string): Promise<{ name: string; skin: string } | null>;
+  /** Display name, equipped skin and current duel rating of an account, or null if unknown/unreachable. */
+  lookupPlayer(playerId: string): Promise<{ name: string; skin: string; rating: number } | null>;
   /** Reports a finished match; returns what each account was granted. */
   reportMatch(report: MatchReport): Promise<Record<string, Grant>>;
 }
@@ -25,8 +25,8 @@ export class HttpMetaService implements MetaService {
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
       if (!res.ok) return null;
-      const body = (await res.json()) as { name: string; skin: string };
-      return { name: body.name, skin: body.skin };
+      const body = (await res.json()) as { name: string; skin: string; rating?: number };
+      return { name: body.name, skin: body.skin, rating: body.rating ?? START_RATING };
     } catch {
       return null; // API down: the player still plays, with their typed name and no skin
     }

@@ -1,7 +1,7 @@
 import { Room, type Client } from '@colyseus/core';
 import { verifyPlayerToken } from '@snake/auth';
 import type { SimConfig } from '@snake/game-core';
-import { DEFAULT_MODE, ffa, modeConfig, modeForRoom, type GameMode } from '@snake/game-modes';
+import { DEFAULT_MODE, ffa, modeConfig, modeForRoom, queueRoomName, type GameMode } from '@snake/game-modes';
 import { DEFAULT_SKIN, SKINS, sanitizeName, type MatchReport } from '@snake/meta';
 import {
   MATCH_MESSAGE,
@@ -21,12 +21,15 @@ import {
   type SettingsMsg,
 } from '@snake/protocol';
 import { Match } from './Match';
+import { QUEUE_SECRET } from './matchmaking';
 import { HttpMetaService, type MetaService } from './meta';
 import { botNames, roomCode } from './names';
 
 export interface ArenaOptions {
   /** Private rooms get a short code, never take matchmaking traffic, and start when the host says so. */
   private?: boolean;
+  /** Set by the ranked queue (QUEUE_SECRET); clients can't forge it. */
+  queued?: string;
 }
 
 export interface JoinOptions {
@@ -104,6 +107,11 @@ export class ArenaRoom extends Room {
     // The mode comes from the room name, never from client options.
     this.mode = modeForRoom(this.roomName);
     this.cfg = modeConfig(this.mode);
+    if (this.mode.ranked && !this.isPrivate) {
+      // Public ranked rooms only come from the queue, and stay hidden from joinOrCreate.
+      if (options.queued !== QUEUE_SECRET) throw new Error(`join the '${queueRoomName(this.mode)}' queue instead`);
+      void this.setPrivate(true);
+    }
     this.maxClients = this.isPrivate ? Math.min(this.mode.maxPrivateSnakes, ROOM_SIZE) : this.mode.maxPlayers;
     this.privateBots = Math.min(DEFAULT_PRIVATE_BOTS, this.mode.maxPrivateSnakes - 1);
     if (this.isPrivate) {
@@ -266,6 +274,7 @@ export class ArenaRoom extends Room {
     const report: MatchReport = {
       matchId: match.id,
       totalPlayers: match.state.snakes.length,
+      ranked: this.isRanked(match, accounts),
       results: match
         .results()
         .filter((r) => accounts.has(r.snakeId))
@@ -277,6 +286,12 @@ export class ArenaRoom extends Room {
       const grant = accountId ? grants[accountId] : undefined;
       if (grant) client.send(REWARDS_MESSAGE, grant);
     }
+  }
+
+  /** Rated only when every snake was an account holder in a public room of a ranked mode. */
+  private isRanked(match: Match, accounts: Map<number, string>): boolean {
+    const snakes = match.state.snakes;
+    return this.mode.ranked && !this.isPrivate && snakes.length === 2 && snakes.every((s) => accounts.has(s.id));
   }
 
   private stepMatch(t: number): void {
