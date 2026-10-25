@@ -1,6 +1,7 @@
 import type { Vec2 } from '@snake/game-core';
 import { getSkin } from '@snake/meta';
 import { Application, Container, Graphics } from 'pixi.js';
+import { Effects } from './Effects';
 
 /** A skin's palette as Pixi colours, banded along the body. */
 interface Paint {
@@ -53,6 +54,10 @@ export class Renderer {
   private zoom = 1;
   private camera: Vec2 = { x: 0, y: 0 };
   private paints = new Map<number, Paint>();
+  private readonly effects = new Effects();
+  // Last frame's living snakes and pellets, diffed each frame to spawn death and eat effects.
+  private lastSnakes = new Map<number, { segments: Vec2[]; radius: number; colors: number[] }>();
+  private lastPellets = new Map<string, { x: number; y: number }>();
 
   /** Skin per snake id. Snakes without one are white when focused, grey otherwise. */
   setSkins(skins: ReadonlyMap<number, string>): void {
@@ -72,7 +77,7 @@ export class Renderer {
       autoDensity: true,
     });
     host.appendChild(this.app.canvas);
-    this.world.addChild(this.grid, this.pellets, this.snakes, this.arena);
+    this.world.addChild(this.grid, this.pellets, this.snakes, this.effects.gfx, this.arena);
     this.app.stage.addChild(this.world);
     this.drawGrid();
   }
@@ -108,9 +113,10 @@ export class Renderer {
     const ordered = [...cur.snakes].sort((a, b) => Number(a.id === focusId) - Number(b.id === focusId));
     for (const s of ordered) {
       if (!s.alive) continue;
-      const paint = this.paints.get(s.id) ?? { colors: [s.id === focusId ? COLORS.player : COLORS.bot], band: 1 };
-      this.drawSnake(g, prevById.get(s.id) ?? s, s, alpha, paint);
+      this.drawSnake(g, prevById.get(s.id) ?? s, s, alpha, this.paintOf(s.id, focusId));
     }
+    this.spawnEffects(cur, focusId);
+    this.effects.update(Math.min(this.app.ticker.deltaMS / 1000, 0.1));
   }
 
   /** Clears the world (between matches) but keeps the grid. */
@@ -118,6 +124,43 @@ export class Renderer {
     this.arena.clear();
     this.pellets.clear();
     this.snakes.clear();
+    this.effects.clear();
+    this.lastSnakes.clear();
+    this.lastPellets.clear();
+  }
+
+  private paintOf(id: number, focusId: number | null): Paint {
+    return this.paints.get(id) ?? { colors: [id === focusId ? COLORS.player : COLORS.bot], band: 1 };
+  }
+
+  private spawnEffects(cur: RenderWorld, focusId: number | null): void {
+    const living = cur.snakes.filter((s) => s.alive);
+    const alive = new Set(living.map((s) => s.id));
+    for (const [id, last] of this.lastSnakes) {
+      if (!alive.has(id)) this.effects.death(last.segments, last.radius, last.colors);
+    }
+
+    // A pellet that vanished right next to a head was eaten by that snake.
+    const pellets = new Map(cur.pellets.map((p) => [`${p.x},${p.y}`, p]));
+    for (const [key, p] of this.lastPellets) {
+      if (pellets.has(key)) continue;
+      for (const s of living) {
+        const reach = s.radius * 3 + 16;
+        if ((s.head.x - p.x) ** 2 + (s.head.y - p.y) ** 2 < reach * reach) {
+          this.effects.eat(p, s.head, this.paintOf(s.id, focusId).colors[0]!);
+          break;
+        }
+      }
+    }
+
+    this.lastSnakes = new Map();
+    for (const s of living) {
+      const colors = this.paintOf(s.id, focusId).colors;
+      this.lastSnakes.set(s.id, { segments: s.segments, radius: s.radius, colors });
+      const tail = s.segments[s.segments.length - 1];
+      if (s.boosting && tail && Math.random() < 0.6) this.effects.boostTrail(tail, s.angle, colors[0]!);
+    }
+    this.lastPellets = pellets;
   }
 
   private drawGrid(): void {
@@ -164,7 +207,7 @@ export class Renderer {
     if (cur.boosting) {
       for (let k = segs.length - 1; k >= 0; k -= 2) {
         const p = at(k);
-        g.circle(p.x, p.y, r * 1.6).fill({ color, alpha: 0.08 });
+        g.circle(p.x, p.y, r * 1.8).fill({ color, alpha: 0.14 });
       }
     }
     for (let k = segs.length - 1; k >= 0; k--) {

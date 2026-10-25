@@ -23,6 +23,7 @@ export function haptic(kind: HapticKind): void {
       : Haptics.notification({ type: kind === 'win' ? NotificationType.Success : NotificationType.Error });
     p.catch(() => {});
   } else {
-    navigator.vibrate?.(VIBRATE_MS[kind]);
+    // Browsers reject (and log) vibration before the first user gesture.
+    if (navigator.userActivation?.hasBeenActive ?? true) navigator.vibrate?.(VIBRATE_MS[kind]);
   }
 }
