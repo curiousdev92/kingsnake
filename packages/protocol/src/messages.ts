@@ -223,6 +223,8 @@ export interface LobbyInfo {
   maxPlayers: number;
   /** Bots that will join the next match. */
   bots: number;
+  /** Game mode id (see @snake/game-modes). */
+  mode: string;
 }
 
 export interface MatchMsg {

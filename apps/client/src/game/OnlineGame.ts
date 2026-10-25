@@ -28,8 +28,8 @@ const NET_TIMER_MS = 5;
 const PING_INTERVAL_MS = 1000;
 const STATS_INTERVAL_MS = 100;
 
-/** How to get into a room: matchmaking, a new private room, or a private room's code. */
-export type JoinRequest = { kind: 'quick' } | { kind: 'create' } | { kind: 'code'; code: string };
+/** How to get into a room: matchmaking or a new private room (by mode room name), or a private room's code. */
+export type JoinRequest = { kind: 'quick'; room: string } | { kind: 'create'; room: string } | { kind: 'code'; code: string };
 
 export interface OnlineOptions {
   url: string;
@@ -154,9 +154,9 @@ export class OnlineGame {
       const options = { name: this.opts.name, token: this.opts.token ?? undefined };
       const room =
         join.kind === 'quick'
-          ? await client.joinOrCreate('arena', options)
+          ? await client.joinOrCreate(join.room, options)
           : join.kind === 'create'
-            ? await client.create('arena', { ...options, private: true })
+            ? await client.create(join.room, { ...options, private: true })
             : await client.joinById(join.code, options);
       if (this.destroyed) {
         void room.leave();

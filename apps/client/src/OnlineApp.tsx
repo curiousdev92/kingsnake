@@ -1,6 +1,7 @@
-import { MAX_SNAKES, type LobbyInfo } from '@snake/protocol';
+import type { LobbyInfo } from '@snake/protocol';
+import { DEFAULT_MODE, MODES, getMode } from '@snake/game-modes';
 import { token } from '@snake/design-tokens';
-import { Button, Panel } from '@snake/ui-kit';
+import { Button, Panel, Tabs } from '@snake/ui-kit';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { create } from 'zustand';
 import { DailyReward, ProfileCard, ShopButton } from './AccountUi';
@@ -11,6 +12,15 @@ import { Renderer } from './game/Renderer';
 const useOnline = create<OnlineStats | null>(() => null);
 
 const CODE_LENGTH = 5;
+const MODE_KEY = 'snake.mode';
+
+function savedMode(): string {
+  try {
+    return getMode(localStorage.getItem(MODE_KEY)).id;
+  } catch {
+    return DEFAULT_MODE.id;
+  }
+}
 
 const normalizeCode = (c: string) => c.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, CODE_LENGTH);
 const serverUrl = () => new URLSearchParams(location.search).get('server') ?? `ws://${location.hostname}:2567`;
@@ -96,6 +106,16 @@ const input: CSSProperties = {
 
 function Menu({ name, onName, onJoin }: { name: string; onName: (n: string) => void; onJoin: (j: JoinRequest) => void | Promise<void> }) {
   const [code, setCode] = useState('');
+  const [modeId, setModeId] = useState(savedMode);
+  const mode = getMode(modeId);
+  const pickMode = (id: string) => {
+    setModeId(id);
+    try {
+      localStorage.setItem(MODE_KEY, id);
+    } catch {
+      // remembered for this visit only
+    }
+  };
   return (
     <div style={{ position: 'fixed', inset: 0, display: 'grid', placeItems: 'center', padding: 16, background: token('color.background'), overflowY: 'auto' }}>
       <Panel style={{ width: 'min(360px, 100%)', boxSizing: 'border-box', display: 'grid', gap: token('space.md') }}>
@@ -105,10 +125,14 @@ function Menu({ name, onName, onJoin }: { name: string; onName: (n: string) => v
           Your name
           <input style={input} value={name} maxLength={16} placeholder="Player" onChange={(e) => onName(e.target.value)} />
         </label>
-        <Button onClick={() => onJoin({ kind: 'quick' })} style={{ fontSize: token('font.sizeLg') }}>
+        <div style={{ display: 'grid', gap: token('space.xs') }}>
+          <Tabs items={MODES.map((m) => ({ value: m.id, label: m.name }))} value={mode.id} onChange={pickMode} />
+          <div style={{ fontSize: token('font.sizeSm'), color: token('color.textMuted'), textAlign: 'center' }}>{mode.description}</div>
+        </div>
+        <Button onClick={() => onJoin({ kind: 'quick', room: mode.room })} style={{ fontSize: token('font.sizeLg') }}>
           Quick play
         </Button>
-        <Button variant="secondary" onClick={() => onJoin({ kind: 'create' })}>
+        <Button variant="secondary" onClick={() => onJoin({ kind: 'create', room: mode.room })}>
           Create private room
         </Button>
         <form
@@ -280,7 +304,8 @@ function PrivateLobby({ game, lobby }: { game: OnlineGame; lobby: LobbyInfo }) {
   const [copied, setCopied] = useState(false);
   const link = inviteLink(lobby.code);
   const total = lobby.players.length + lobby.bots;
-  const maxBots = MAX_SNAKES - lobby.players.length;
+  const mode = getMode(lobby.mode);
+  const maxBots = Math.max(0, mode.maxPrivateSnakes - lobby.players.length);
 
   const copy = async () => {
     try {
@@ -294,7 +319,7 @@ function PrivateLobby({ game, lobby }: { game: OnlineGame; lobby: LobbyInfo }) {
 
   return (
     <Center>
-      <div style={{ color: token('color.textMuted') }}>Private room code</div>
+      <div style={{ color: token('color.textMuted') }}>Private room code · {mode.name}</div>
       <div style={{ ...title, fontSize: 40, letterSpacing: '0.2em', margin: `${token('space.xs')} 0 ${token('space.md')}` }}>{lobby.code}</div>
       <Button variant="secondary" onClick={copy}>
         {copied ? 'Link copied' : 'Copy invite link'}

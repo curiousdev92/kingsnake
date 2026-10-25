@@ -18,6 +18,7 @@ import {
 import { signPlayerToken } from '@snake/auth';
 import type { Grant, MatchReport } from '@snake/meta';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { MODES } from '@snake/game-modes';
 import { ArenaRoom, ROOM_SIZE, timing } from '../src/ArenaRoom';
 import type { MetaService } from '../src/meta';
 
@@ -40,7 +41,7 @@ beforeAll(async () => {
   ArenaRoom.meta = fakeMeta;
   Object.assign(timing, { lobbyWaitMs: 600, fullLobbyMs: 200, countdownMs: 300, resultsMs: 500 });
   server = new Server({ transport: new WebSocketTransport() });
-  server.define('arena', ArenaRoom);
+  for (const mode of MODES) server.define(mode.room, ArenaRoom);
   await server.listen(PORT);
 });
 
@@ -211,5 +212,38 @@ describe('accounts and rewards', () => {
     await until(() => me.matches.length > 0, 2000);
     expect(me.last().lobby.players[0]!.name).toBe('Anon');
     await room.leave();
+  });
+});
+
+describe('duel', () => {
+  it('matches two duel players together, apart from free-for-all, with no bots', async () => {
+    const duel = async (name: string) => record(await new Client(URL).joinOrCreate('duel', { name }));
+    const a = await duel('Ann');
+    const b = await duel('Ben');
+    const c = await duel('Cat');
+    const f = await quick('Fay');
+    expect(b.room.roomId).toBe(a.room.roomId);
+    // The duel room is full, so the third duelist gets a fresh one; free-for-all is separate.
+    expect(c.room.roomId).not.toBe(a.room.roomId);
+    expect(f.room.roomId).not.toBe(a.room.roomId);
+    expect(f.room.roomId).not.toBe(c.room.roomId);
+
+    await until(() => a.last()?.phase === 'playing', 3000);
+    expect(a.last().lobby.mode).toBe('duel');
+    expect(a.last().lobby.maxPlayers).toBe(2);
+    expect(a.last().roster.length).toBe(2);
+    expect(a.last().roster.some((r) => r.isBot)).toBe(false);
+    expect(a.last().config.headToHead).toBe('bigger-wins');
+    for (const r of [a, b, c, f]) await r.room.leave();
+  });
+
+  it('private duel rooms cap the host to one bot', async () => {
+    const h = await new Client(URL).create('duel', { name: 'Host', private: true }).then(record);
+    await until(() => h.matches.length > 0, 2000);
+    expect(h.last().lobby.bots).toBe(1);
+    h.room.send(SETTINGS_MESSAGE, { bots: 9 });
+    await sleep(100);
+    expect(h.last().lobby.bots).toBe(1);
+    await h.room.leave();
   });
 });

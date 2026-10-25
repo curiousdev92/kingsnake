@@ -1,6 +1,7 @@
 import { Room, type Client } from '@colyseus/core';
 import { verifyPlayerToken } from '@snake/auth';
-import { makeConfig, type SimConfig } from '@snake/game-core';
+import type { SimConfig } from '@snake/game-core';
+import { DEFAULT_MODE, ffa, modeConfig, modeForRoom, type GameMode } from '@snake/game-modes';
 import { DEFAULT_SKIN, SKINS, sanitizeName, type MatchReport } from '@snake/meta';
 import {
   MATCH_MESSAGE,
@@ -59,8 +60,8 @@ export const timing = {
   resultsMs: 5_000,
 };
 
-/** Humans per room, and the match size public rooms fill to with bots. */
-export const ROOM_SIZE = 8;
+/** Free-for-all room size: humans per room, and the match size public rooms fill to with bots. */
+export const ROOM_SIZE = ffa.maxPlayers;
 const DEFAULT_PRIVATE_BOTS = 6;
 const RECONNECT_SECONDS = 10;
 
@@ -80,11 +81,12 @@ export class ArenaRoom extends Room {
   /** Accounts and rewards. Tests swap in a fake before rooms are created. */
   static meta: MetaService = new HttpMetaService();
 
-  override maxClients = ROOM_SIZE;
+  override maxClients = DEFAULT_MODE.maxPlayers;
   // Inputs at 30 Hz plus pings; anything far above that is abuse.
   override maxMessagesPerSecond = 120;
 
-  private readonly cfg: SimConfig = makeConfig();
+  private mode: GameMode = DEFAULT_MODE;
+  private cfg: SimConfig = modeConfig(DEFAULT_MODE);
   private isPrivate = false;
   private privateBots = DEFAULT_PRIVATE_BOTS;
   private phase: MatchPhase = 'waiting';
@@ -99,6 +101,11 @@ export class ArenaRoom extends Room {
 
   override onCreate(options: ArenaOptions = {}) {
     this.isPrivate = options.private === true;
+    // The mode comes from the room name, never from client options.
+    this.mode = modeForRoom(this.roomName);
+    this.cfg = modeConfig(this.mode);
+    this.maxClients = this.isPrivate ? Math.min(this.mode.maxPrivateSnakes, ROOM_SIZE) : this.mode.maxPlayers;
+    this.privateBots = Math.min(DEFAULT_PRIVATE_BOTS, this.mode.maxPrivateSnakes - 1);
     if (this.isPrivate) {
       this.roomId = roomCode();
       void this.setPrivate(true);
@@ -124,7 +131,7 @@ export class ArenaRoom extends Room {
       if (!this.isHostWaiting(client)) return;
       const bots = Math.floor(Number(msg?.bots));
       if (!Number.isFinite(bots)) return;
-      this.privateBots = Math.max(0, Math.min(MAX_SNAKES - this.humans, bots));
+      this.privateBots = Math.max(0, Math.min(this.maxPrivateSnakes - this.humans, bots));
       this.broadcastMatch();
     });
     this.onMessage(START_MESSAGE, (client) => {
@@ -179,13 +186,17 @@ export class ArenaRoom extends Room {
     return this.players.size;
   }
 
+  private get maxPrivateSnakes(): number {
+    return Math.min(this.mode.maxPrivateSnakes, MAX_SNAKES);
+  }
+
   private isHostWaiting(client: Client): boolean {
     return this.isPrivate && this.phase === 'waiting' && client.sessionId === this.hostSession;
   }
 
   private botsForNextMatch(): number {
-    if (this.isPrivate) return Math.min(this.privateBots, MAX_SNAKES - this.humans);
-    return Math.max(0, ROOM_SIZE - this.humans);
+    if (this.isPrivate) return Math.max(0, Math.min(this.privateBots, this.maxPrivateSnakes - this.humans));
+    return Math.max(0, this.mode.maxPlayers - this.humans);
   }
 
   private update(): void {
@@ -200,7 +211,7 @@ export class ArenaRoom extends Room {
           this.setPhase('waiting', null);
         } else if (t >= this.phaseEndsAt!) {
           this.startMatch(t);
-        } else if (!this.isPrivate && this.humans >= ROOM_SIZE && this.phaseEndsAt! - t > timing.fullLobbyMs) {
+        } else if (!this.isPrivate && this.humans >= this.mode.maxPlayers && this.phaseEndsAt! - t > timing.fullLobbyMs) {
           this.setPhase('countdown', t + timing.fullLobbyMs); // full: no reason to wait
         }
         break;
@@ -307,6 +318,7 @@ export class ArenaRoom extends Room {
         players: [...this.players].map(([id, p]) => ({ name: p.name, host: id === this.hostSession, you: id === sessionId })),
         maxPlayers: this.maxClients,
         bots: this.botsForNextMatch(),
+        mode: this.mode.id,
       },
       config: this.cfg,
     };

@@ -19,6 +19,7 @@
     "@snake/assets": "workspace:*",
     "@snake/design-tokens": "workspace:*",
     "@snake/game-core": "workspace:*",
+    "@snake/game-modes": "workspace:*",
     "@snake/meta": "workspace:*",
     "@snake/netcode": "workspace:*",
     "@snake/protocol": "workspace:*",

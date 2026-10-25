@@ -236,6 +236,9 @@ importers:
       '@snake/game-core':
         specifier: workspace:*
         version: link:../../packages/game-core
+      '@snake/game-modes':
+        specifier: workspace:*
+        version: link:../../packages/game-modes
       '@snake/meta':
         specifier: workspace:*
         version: link:../../packages/meta
@@ -303,6 +306,9 @@ importers:
       '@snake/game-core':
         specifier: workspace:*
         version: link:../../packages/game-core
+      '@snake/game-modes':
+        specifier: workspace:*
+        version: link:../../packages/game-modes
       '@snake/meta':
         specifier: workspace:*
         version: link:../../packages/meta
@@ -372,6 +378,22 @@ importers:
         version: 5.9.3
 
   packages/game-core:
+    devDependencies:
+      '@snake/config':
+        specifier: workspace:*
+        version: link:../config
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.7(@types/node@24.19.2)(tsx@4.23.15)
+
+  packages/game-modes:
+    dependencies:
+      '@snake/game-core':
+        specifier: workspace:*
+        version: link:../game-core
     devDependencies:
       '@snake/config':
         specifier: workspace:*
