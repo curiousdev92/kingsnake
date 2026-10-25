@@ -63,9 +63,10 @@ export class RemoteWorld {
     this.pelletsDirty = true;
   }
 
-  applySnapshot(msg: SnapshotMsg): void {
+  /** Returns false for a stale or reordered snapshot, which is ignored. */
+  applySnapshot(msg: SnapshotMsg): boolean {
     const latest = this.buffer.latest;
-    if (latest && msg.serverTime <= latest.serverTime) return; // stale or reordered
+    if (latest && msg.serverTime <= latest.serverTime) return false;
 
     const cfg = this.cfg;
     const seen = new Set<number>();
@@ -105,6 +106,7 @@ export class RemoteWorld {
       snakes,
       arena: { center: { x: 0, y: 0 }, radius: msg.arenaRadius, targetRadius: msg.arenaTargetRadius },
     });
+    return true;
   }
 
   queueEvents(msg: EventsMsg): void {
@@ -133,6 +135,11 @@ export class RemoteWorld {
       this.pelletsDirty = false;
     }
     return { ...s, pellets: this.pelletList };
+  }
+
+  /** Copy of a snake's reconstructed head path at the newest snapshot (oldest first). */
+  pathOf(id: number): Vec2[] | undefined {
+    return this.paths.get(id)?.map((p) => ({ x: p.x, y: p.y }));
   }
 
   get pelletCount(): number {

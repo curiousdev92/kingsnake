@@ -1,6 +1,6 @@
 import { Client, type Room } from '@colyseus/sdk';
 import { makeConfig } from '@snake/game-core';
-import { ClockSync, NetworkSimulator, RemoteWorld, type NetConditions } from '@snake/netcode';
+import { AdaptiveDelay, ClockSync, NetworkSimulator, Predictor, RemoteWorld, type NetConditions, type ViewSnake } from '@snake/netcode';
 import {
   MATCH_MESSAGE,
   Msg,
@@ -11,11 +11,14 @@ import {
   encodePing,
   type MatchMsg,
   type MatchPhase,
+  type SnapshotMsg,
 } from '@snake/protocol';
 import { PlayerInput } from './PlayerInput';
 import type { Renderer } from './Renderer';
 
 const INPUT_INTERVAL_MS = 1000 / 30;
+/** How often the net timer wakes; client ticks are counted from the clock, not from wakeups. */
+const NET_TIMER_MS = 5;
 const PING_INTERVAL_MS = 1000;
 const STATS_INTERVAL_MS = 100;
 
@@ -35,6 +38,8 @@ export interface OnlineStats {
   you: number | null;
   youAlive: boolean;
   placement: number;
+  /** How the local snake died, e.g. "ran into Bot 3". */
+  deathReason: string | null;
   winnerName: string | null;
   mass: number;
   alive: number;
@@ -45,20 +50,29 @@ export interface OnlineStats {
   kbpsDown: number;
   buffered: number;
   extrapolating: boolean;
+  interpMs: number;
+  /** Size of the last prediction correction in world units, or null when not predicting. */
+  predErr: number | null;
+  predSnaps: number;
 }
 
 /**
  * Online mode: sends inputs to the authoritative server and renders the world
  * from interpolated snapshots, about `interpDelayMs` in the past. All traffic goes
- * through the network simulator in both directions. Prediction of the local snake
- * is build step 4; for now it is interpolated like everyone else.
+ * through the network simulator in both directions. The local snake is predicted
+ * (drawn in the present from local inputs, reconciled with each snapshot) while
+ * everyone else is interpolated.
  */
 export class OnlineGame {
   /** client -> server */
   readonly up = new NetworkSimulator();
   /** server -> client */
   readonly down = new NetworkSimulator();
-  interpDelayMs = 100;
+  readonly predictor = new Predictor(makeConfig());
+  readonly adaptive = new AdaptiveDelay();
+  predict = true;
+  autoInterp = true;
+  manualInterpMs = 100;
 
   private room: Room | null = null;
   private readonly clock = new ClockSync();
@@ -67,7 +81,12 @@ export class OnlineGame {
   private match: MatchMsg | null = null;
   private seq = 0;
   private lastPingAt = -Infinity;
+  /** Scheduled time of the latest client tick, and of the next one. */
+  private lastTickAt = 0;
+  private nextTickAt = performance.now();
+  private lastFrameAt = performance.now();
   private placement = 0;
+  private deathReason: string | null = null;
   private lastSample: { mass: number; alive: number; you: boolean; extrapolating: boolean } = { mass: 0, alive: 0, you: false, extrapolating: false };
   private connection: OnlineStats['connection'] = 'connecting';
   private error: string | null = null;
@@ -86,9 +105,13 @@ export class OnlineGame {
   ) {
     this.player = new PlayerInput(renderer.canvas);
     renderer.app.ticker.add(this.onTick);
-    this.timers.push(setInterval(() => this.netTick(), INPUT_INTERVAL_MS));
+    this.timers.push(setInterval(() => this.netTick(), NET_TIMER_MS));
     this.timers.push(setInterval(() => this.emitStats(performance.now()), STATS_INTERVAL_MS));
     void this.connect();
+  }
+
+  get interpDelayMs(): number {
+    return this.autoInterp ? this.adaptive.delayMs : this.manualInterpMs;
   }
 
   /** Applies simulated conditions given as round trip: half the latency and jitter each way. */
@@ -114,7 +137,7 @@ export class OnlineGame {
         const copy = bytes.slice();
         this.down.deliver(() => {
           this.count(copy.byteLength, true);
-          this.world.applySnapshot(decodeSnapshot(copy));
+          this.onSnapshot(decodeSnapshot(copy));
         }, false);
       });
       room.onMessage(Msg.Events, (bytes: Uint8Array) => {
@@ -146,11 +169,30 @@ export class OnlineGame {
     }
   }
 
+  private onSnapshot(msg: SnapshotMsg): void {
+    if (!this.world.applySnapshot(msg)) return;
+    if (this.clock.synced) this.adaptive.addSample(this.clock.serverNow(performance.now()) - msg.serverTime);
+
+    const you = this.match?.you ?? null;
+    if (you === null) return;
+    const own = msg.snakes.find((s) => s.id === you);
+    if (!own) {
+      this.predictor.reset(); // dead: the server's word is final
+      return;
+    }
+    this.predictor.reconcile({ snake: own, path: this.world.pathOf(you)!, arenaRadius: msg.arenaRadius, lastSeq: msg.lastSeq });
+  }
+
   private onMatch(m: MatchMsg): void {
     const prev = this.match;
     this.match = m;
     this.world.cfg = m.config;
-    if (m.phase === 'playing' && prev?.phase !== 'playing') this.placement = 0;
+    this.predictor.setConfig(m.config);
+    if (m.phase !== prev?.phase || m.you !== prev?.you) this.predictor.reset();
+    if (m.phase === 'playing' && prev?.phase !== 'playing') {
+      this.placement = 0;
+      this.deathReason = null;
+    }
     if (m.phase === 'waiting' || m.phase === 'countdown') this.world.buffer.clear();
   }
 
@@ -165,9 +207,13 @@ export class OnlineGame {
 
   private netTick(): void {
     const now = performance.now();
-    if (this.match?.phase === 'playing' && this.match.you !== null) {
-      const input = this.player.sample();
-      this.send(Msg.Input, encodeInput({ seq: ++this.seq, targetAngle: input.targetAngle, boost: input.boost }));
+    // Exactly 30 client ticks per second on average: the server applies one input per
+    // tick, so producing inputs at a drifting rate would desync prediction.
+    if (now - this.nextTickAt > 250) this.nextTickAt = now; // tab was asleep: don't burst
+    while (now >= this.nextTickAt) {
+      this.clientTick();
+      this.lastTickAt = this.nextTickAt;
+      this.nextTickAt += INPUT_INTERVAL_MS;
     }
     // Ping fast until the clock is synced, then once a second.
     if (now - this.lastPingAt >= (this.clock.synced ? PING_INTERVAL_MS : 200)) {
@@ -176,21 +222,48 @@ export class OnlineGame {
     }
   }
 
+  private clientTick(): void {
+    if (this.match?.phase !== 'playing' || this.match.you === null) return;
+    const input = this.player.sample();
+    const seq = ++this.seq;
+    this.send(Msg.Input, encodeInput({ seq, targetAngle: input.targetAngle, boost: input.boost }));
+    this.predictor.applyInput(seq, input);
+  }
+
   private render(now: number): void {
+    this.predictor.decay(now - this.lastFrameAt);
+    this.lastFrameAt = now;
     if (!this.clock.synced) return;
     const renderTime = this.clock.serverNow(now) - this.interpDelayMs;
     const you = this.match?.you ?? null;
     for (const d of this.world.applyEventsUntil(renderTime)) {
-      if (d.snakeId === you) this.placement = (this.world.buffer.latest?.snakes.length ?? 0) + 1;
+      if (d.snakeId !== you) continue;
+      this.placement = (this.world.buffer.latest?.snakes.length ?? 0) + 1;
+      const killer = this.match?.roster.find((r) => r.id === d.killerId)?.name ?? 'someone';
+      this.deathReason = d.cause === 'arena' ? 'left the arena' : d.cause === 'head' ? `hit ${killer} head-on` : `ran into ${killer}`;
     }
     const s = this.world.sample(renderTime);
     if (!s) {
       this.renderer.clear();
       return;
     }
-    const a = { ...s.a, pellets: s.pellets };
-    const b = { ...s.b, pellets: s.pellets };
-    const me = s.b.snakes.find((sn) => sn.id === you);
+    let snakesA: ViewSnake[] = s.a.snakes;
+    let snakesB: ViewSnake[] = s.b.snakes;
+    if (this.predict && you !== null) {
+      const latestHasYou = this.world.buffer.latest?.snakes.some((sn) => sn.id === you) ?? false;
+      const predicted = this.predictor.view((now - this.lastTickAt) / INPUT_INTERVAL_MS);
+      // Own snake comes from the prediction, in the present. The same object in both
+      // states makes the renderer's interpolation a no-op for it.
+      const swap = (list: ViewSnake[]) => {
+        const others = list.filter((sn) => sn.id !== you);
+        return predicted ? [...others, predicted] : latestHasYou ? list : others;
+      };
+      snakesA = swap(snakesA);
+      snakesB = swap(snakesB);
+    }
+    const a = { ...s.a, snakes: snakesA, pellets: s.pellets };
+    const b = { ...s.b, snakes: snakesB, pellets: s.pellets };
+    const me = snakesB.find((sn) => sn.id === you);
     // Spectate the biggest snake once our own is gone.
     const focus = me ? you : ([...s.b.snakes].sort((x, y) => y.mass - x.mass)[0]?.id ?? null);
     this.renderer.render(a, b, s.t, focus);
@@ -210,6 +283,7 @@ export class OnlineGame {
       you: m?.you ?? null,
       youAlive: this.lastSample.you,
       placement: this.placement,
+      deathReason: this.deathReason,
       winnerName: m?.winnerId != null ? (m.roster.find((r) => r.id === m.winnerId)?.name ?? null) : null,
       mass: Math.round(this.lastSample.mass),
       alive: this.lastSample.alive,
@@ -219,6 +293,9 @@ export class OnlineGame {
       kbpsDown: Math.round((this.bytesWindow.reduce((sum, e) => sum + e.bytes, 0) * 8) / 100) / 10,
       buffered: this.world.buffer.size,
       extrapolating: this.lastSample.extrapolating,
+      interpMs: Math.round(this.interpDelayMs),
+      predErr: this.predict && this.predictor.active ? Math.round(this.predictor.lastError * 10) / 10 : null,
+      predSnaps: this.predictor.snaps,
     });
   }
 

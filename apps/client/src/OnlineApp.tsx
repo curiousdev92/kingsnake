@@ -115,7 +115,13 @@ function PhaseOverlay() {
       );
     case 'playing':
       if (s.you === null) return <Banner>Spectating: you will join the next match</Banner>;
-      if (!s.youAlive && s.placement > 0) return <Banner>You died (#{s.placement} of {s.total}). Spectating</Banner>;
+      if (!s.youAlive && s.placement > 0) {
+        return (
+          <Banner>
+            You {s.deathReason ?? 'died'} (#{s.placement} of {s.total}). Spectating
+          </Banner>
+        );
+      }
       return null;
   }
 }
@@ -132,22 +138,39 @@ const KNOBS = [
   { key: 'rtt', label: 'Latency (RTT ms)', min: 0, max: 400, step: 10 },
   { key: 'jitter', label: 'Jitter (ms)', min: 0, max: 100, step: 5 },
   { key: 'loss', label: 'Loss (%)', min: 0, max: 20, step: 1 },
-  { key: 'interp', label: 'Interp delay (ms)', min: 30, max: 300, step: 10 },
+  { key: 'interp', label: 'Interp delay (ms)', min: 30, max: 400, step: 10 },
+  { key: 'smoothing', label: 'Correction smoothing (ms)', min: 0, max: 300, step: 10 },
 ] as const;
 type KnobKey = (typeof KNOBS)[number]['key'];
 
-/** Network simulator controls and live diagnostics. */
+/** Network simulator, prediction and interpolation controls with live diagnostics. */
 function NetPanel({ game }: { game: OnlineGame }) {
   const s = useOnline();
   const [open, setOpen] = useState(true);
-  const [v, setV] = useState<Record<KnobKey, number>>({ rtt: 0, jitter: 0, loss: 0, interp: game.interpDelayMs });
+  const [v, setV] = useState<Record<KnobKey, number>>({
+    rtt: 0,
+    jitter: 0,
+    loss: 0,
+    interp: game.manualInterpMs,
+    smoothing: game.predictor.smoothingMs,
+  });
+  const [predict, setPredict] = useState(game.predict);
+  const [autoInterp, setAutoInterp] = useState(game.autoInterp);
 
   const update = (key: KnobKey, value: number) => {
     const next = { ...v, [key]: value };
     setV(next);
     game.setConditions(next.rtt, next.jitter, next.loss / 100);
-    game.interpDelayMs = next.interp;
+    game.manualInterpMs = next.interp;
+    game.predictor.smoothingMs = next.smoothing;
   };
+
+  const toggle = (label: string, checked: boolean, set: (on: boolean) => void) => (
+    <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+      <input type="checkbox" checked={checked} onChange={(e) => set(e.target.checked)} />
+      {label}
+    </label>
+  );
 
   return (
     <div style={{ position: 'absolute', top: 12, right: 12, display: 'grid', gap: 8, justifyItems: 'end' }}>
@@ -160,8 +183,8 @@ function NetPanel({ game }: { game: OnlineGame }) {
         </Button>
       </div>
       {open && (
-        <Panel style={{ width: 240, fontSize: token('font.sizeSm'), display: 'grid', gap: 8 }}>
-          {KNOBS.map((k) => (
+        <Panel style={{ width: 250, maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', fontSize: token('font.sizeSm'), display: 'grid', gap: 8 }}>
+          {KNOBS.filter((k) => !(k.key === 'interp' && autoInterp)).map((k) => (
             <label key={k.key} style={{ display: 'grid', gap: 2 }}>
               <span>
                 {k.label}: <b>{v[k.key]}</b>
@@ -169,12 +192,24 @@ function NetPanel({ game }: { game: OnlineGame }) {
               <input type="range" min={k.min} max={k.max} step={k.step} value={v[k.key]} onChange={(e) => update(k.key, Number(e.target.value))} />
             </label>
           ))}
+          {toggle('Predict own snake', predict, (on) => {
+            game.predict = on;
+            setPredict(on);
+          })}
+          {toggle('Auto interp delay', autoInterp, (on) => {
+            game.autoInterp = on;
+            setAutoInterp(on);
+          })}
           {s && (
             <div style={{ color: token('color.textMuted'), fontVariantNumeric: 'tabular-nums', lineHeight: 1.5 }}>
               RTT {s.rttMs} ms · {s.snapshotsPerSec} snap/s
               <br />
               {s.kbpsDown} kbps down · buffer {s.buffered}
+              <br />
+              interp {s.interpMs} ms{autoInterp ? ' (auto)' : ''}
               {s.extrapolating && <b style={{ color: token('color.text') }}> · extrapolating</b>}
+              <br />
+              {s.predErr === null ? 'prediction off' : `pred error ${s.predErr} · snaps ${s.predSnaps}`}
             </div>
           )}
         </Panel>

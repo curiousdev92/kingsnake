@@ -63,6 +63,23 @@ describe('Match', () => {
     expect(keyframes.get(2)).toBe(1);
   });
 
+  it('applies queued inputs one per tick, in order', () => {
+    const m = twoPlayers();
+    // Two inputs arrive within one tick (jitter): they must not collapse into one.
+    m.setInput(1, { seq: 1, targetAngle: 1, boost: false });
+    m.setInput(1, { seq: 2, targetAngle: 2, boost: false });
+    m.advance(dtMs);
+    expect(m.lastSeqFor(1)).toBe(1);
+    expect(m.state.snakes[0]!.targetAngle).toBe(1);
+    m.advance(dtMs * 2);
+    expect(m.lastSeqFor(1)).toBe(2);
+    expect(m.state.snakes[0]!.targetAngle).toBe(2);
+    // Queue empty: the last input repeats and lastSeq holds.
+    m.advance(dtMs * 3);
+    expect(m.lastSeqFor(1)).toBe(2);
+    expect(m.state.snakes[0]!.targetAngle).toBe(2);
+  });
+
   it('hands a leaving player\'s snake to the bot AI', () => {
     const m = twoPlayers();
     m.convertToBot(2);

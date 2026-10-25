@@ -13,16 +13,30 @@ import type { DeathSnap, EventsMsg, InputMsg, SnapshotMsg } from '@snake/protoco
 export const KEYFRAME_TICKS = 30;
 /** Most steps taken in one `advance` call; beyond that the match clock slips. */
 const MAX_CATCH_UP_STEPS = 8;
+/** Queued inputs beyond this are dropped (oldest first) to bound added latency. */
+const MAX_QUEUED_INPUTS = 4;
+
+interface InputQueue {
+  queue: { seq: number; input: Input }[];
+  lastReceived: number;
+  /** Seq of the input applied on the latest tick (0 = none yet). */
+  lastApplied: number;
+  /** Repeated on ticks when the queue is empty. */
+  current: Input | null;
+}
 
 /**
- * One authoritative match: owns the game-core state, latest inputs per snake,
+ * One authoritative match: owns the game-core state and per-player input queues,
  * and turns state changes into protocol messages. Knows nothing about Colyseus.
+ *
+ * Each player's inputs are applied exactly one per tick, in order (the last one
+ * repeats when the queue runs dry). Clients predict one step per input sent, so this
+ * keeps server and prediction stepping in lockstep despite network jitter.
  */
 export class Match {
   state: GameState;
   private startTime: number;
-  private readonly inputs = new Map<number, Input>();
-  private readonly lastSeq = new Map<number, number>();
+  private readonly inputs = new Map<number, InputQueue>();
 
   constructor(
     players: PlayerSpec[],
@@ -43,15 +57,33 @@ export class Match {
     return this.startTime + tick * this.cfg.dt * 1000;
   }
 
-  /** Stores a player's latest input. Older or duplicate sequence numbers are ignored. */
+  /** Queues a player's input. Older or duplicate sequence numbers are ignored. */
   setInput(snakeId: number, msg: InputMsg): void {
-    if (msg.seq <= (this.lastSeq.get(snakeId) ?? -1)) return;
-    this.lastSeq.set(snakeId, msg.seq);
-    this.inputs.set(snakeId, { targetAngle: msg.targetAngle, boost: msg.boost });
+    let q = this.inputs.get(snakeId);
+    if (!q) this.inputs.set(snakeId, (q = { queue: [], lastReceived: 0, lastApplied: 0, current: null }));
+    if (msg.seq <= q.lastReceived) return;
+    q.lastReceived = msg.seq;
+    q.queue.push({ seq: msg.seq, input: { targetAngle: msg.targetAngle, boost: msg.boost } });
+    if (q.queue.length > MAX_QUEUED_INPUTS) q.queue.shift();
   }
 
+  /** The last input seq applied to a snake, echoed in snapshots for reconciliation. */
   lastSeqFor(snakeId: number | null): number {
-    return snakeId === null ? 0 : (this.lastSeq.get(snakeId) ?? 0);
+    return snakeId === null ? 0 : (this.inputs.get(snakeId)?.lastApplied ?? 0);
+  }
+
+  /** Pops one input per player for the next tick. */
+  private nextInputs(): Map<number, Input> {
+    const out = new Map<number, Input>();
+    for (const [id, q] of this.inputs) {
+      const next = q.queue.shift();
+      if (next) {
+        q.current = next.input;
+        q.lastApplied = next.seq;
+      }
+      if (q.current) out.set(id, q.current);
+    }
+    return out;
   }
 
   /** Hands a snake over to the bot AI (its player left). */
@@ -72,7 +104,7 @@ export class Match {
         break;
       }
       const prev = this.state;
-      const inputs = botInputs(prev, this.cfg, new Map(this.inputs));
+      const inputs = botInputs(prev, this.cfg, this.nextInputs());
       this.state = step(prev, inputs, this.cfg);
       const events = this.diff(prev, this.state);
       if (events.added.length || events.removed.length || events.deaths.length) out.push(events);
