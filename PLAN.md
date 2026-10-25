@@ -151,3 +151,36 @@ How:
 ## 11. First task for Claude Code
 
 Scaffold the pnpm + Turborepo monorepo per section 3. Implement `game-core` per section 4 (continuous movement, turn-rate limit, boost, pellets, spatial hash collisions, shrinking circular arena, bots) with Vitest tests. Build a single-player Pixi sandbox in `apps/client` with mouse steering and boost against bots so we can judge the feel. Create the `design-tokens` contract and `theme.mono`, and a minimal `ui-kit` Button and Panel that read tokens and fall back when no skin is set. Do not build networking yet.
+
+## 12. Remaining work
+
+Steps 1-6 of the build order are done. What is left, by area:
+
+**Step 7: mobile and polish**
+- Generate the native projects (`pnpm exec cap add android`, `cap add ios`, then `pnpm cap:sync` in `apps/client`). Needs Android Studio, and Xcode on a Mac.
+- Test touch controls and haptics on real phones.
+- Online eat haptics: the protocol's pellet events don't say who ate, so online play only buzzes on kills and deaths.
+
+**Step 8: real art**
+- Snake skin atlases (skins are colour palettes until then), pellet and effect atlases.
+- 9-slice UI art and icons in `assets.manifest.ts` (empty today; everything uses token fallbacks).
+- Smooth body rendering (`MeshRope` or sprite chain) instead of placeholder circles.
+
+**Step 9: modes, ranked, seasons**
+- More modes: teams, timed score, endless Slither-style, power-ups.
+- Rule hooks on `GameMode` (per tick, on death, win check) and in game-core's `step`, needed by any mode that changes the rules rather than just the settings.
+
+**Rewards and cosmetics (section 9)**
+- Missions and the optional season pass.
+- Cosmetics beyond skins: trails, boost effects, death effects, avatars, emotes.
+
+**Accounts and social**
+- Real sign-in (Google, Apple or Supabase) exchanged for the existing player token; only guest accounts exist.
+- Friends list.
+
+**Infrastructure**
+- Redis for sessions (leaderboards run on Postgres until they need more).
+- Lint setup.
+- Production deployment (hosting, `AUTH_SECRET`/`INTERNAL_KEY`/`DATABASE_URL` configuration).
+
+Out of scope: WebTransport.
