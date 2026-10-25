@@ -71,18 +71,25 @@ Size at 1x: 64x64 for large, 32x32 for small. Provide a clean silhouette so they
 
 Delivered as sprite sheets (PNG + JSON, exported from a packer such as free-tex-packer). Max atlas size 2048x2048.
 
-**Snake skins**: each skin is its own atlas named `skin.<id>`:
-- `head.up / down / left / right` (cell-size, e.g. 64x64 at 1x), plus `head.dead`
-- `body.straight`, `body.corner` (4 rotations or one with rotation data), `body.tail`
-- Optional 4-frame idle/move animation per part
-- Skins must tile cleanly cell to cell with no seams
+**Snake skins**: snakes move in free directions and bend smoothly, so a skin is not made of grid cells. Each skin is its own atlas named `skin.<id>`:
+- `head`: one sprite facing right (the engine rotates it), 96x96 at 1x, plus `head.dead` and `head.boost`
+- `eyes`: optional separate layer so eyes can look toward the steering direction
+- `body.segment`: a round segment, 64x64, designed to overlap its neighbors by about 50% with no visible seams
+- `body.segment.alt`: an alternate segment for patterns (stripes, alternating colors)
+- `body.pattern`: optional seamless horizontal strip (256x64) that tiles along the length of the body, used instead of segments for rope-style rendering
+- `tail.tip`: tapered end, 64x64
+- Optional 4-frame idle animation for the head
+- The body gets thicker as the snake grows, so all parts must scale cleanly (no 1px details)
 
 **Pickups and arena:**
-- `food.normal`, `food.bonus`, `food.power.speed`, `food.power.shield`, `food.power.magnet` (64x64, optional 4-frame bob)
-- `arena.tile.a / b` (checker or pattern, seamless), `arena.wall`, `arena.storm.edge` (shrinking zone border)
+- `pellet.<color>`: small glowing pellets, 32x32, in 6-8 colors; `pellet.big` (dropped by dead snakes), 64x64, with an optional 4-frame glow pulse
+- `arena.bg`: seamless 512x512 background tile, repeated and slightly parallaxed across the map
+- `arena.border`: the circular boundary ring (seamless along its length)
+- `arena.storm`: shrinking danger zone overlay or vignette, partly transparent
+- Optional later: `powerup.speed`, `powerup.shield`, `powerup.magnet` (64x64)
 
 **Effects (frame sequences):**
-- `fx.death.burst` (8-12 frames), `fx.eat.pop` (6 frames), `fx.spawn.ring` (8 frames), `fx.trail.<id>` (particle sprites)
+- `fx.death.burst` (8-12 frames), `fx.eat.pop` (6 frames), `fx.spawn.ring` (8 frames), `fx.boost.trail` (particle sprites emitted while boosting), `fx.trail.<id>` (cosmetic trail particles)
 
 ## 9. Backgrounds and logo
 
