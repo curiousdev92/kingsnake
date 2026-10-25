@@ -91,9 +91,14 @@ function Tuning({ sandbox }: { sandbox: Sandbox }) {
   const cfg = sandbox.cfg as unknown as Record<string, number>;
   return (
     <div style={{ position: 'absolute', top: 12, right: 12, display: 'grid', gap: 8, justifyItems: 'end' }}>
-      <Button variant="secondary" onClick={() => setOpen(!open)} style={{ fontSize: token('font.sizeSm') }}>
-        {open ? 'Close' : 'Tune'}
-      </Button>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Button variant="secondary" onClick={() => (location.hash = 'online')} style={{ fontSize: token('font.sizeSm') }}>
+          Play online
+        </Button>
+        <Button variant="secondary" onClick={() => setOpen(!open)} style={{ fontSize: token('font.sizeSm') }}>
+          {open ? 'Close' : 'Tune'}
+        </Button>
+      </div>
       {open && (
         <Panel style={{ width: 240, fontSize: token('font.sizeSm'), display: 'grid', gap: 8 }}>
           {KNOBS.map((k) => (

@@ -3,10 +3,11 @@
   "private": true,
   "packageManager": "pnpm@12.8.1",
   "scripts": {
-    "dev": "turbo run dev --filter=@snake/client",
+    "dev": "turbo run dev --filter=@snake/client --filter=@snake/game-server",
     "build": "turbo run build",
     "test": "turbo run test",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "dev:client": "turbo run dev --filter=@snake/client"
   },
   "devDependencies": {
     "turbo": "^2.5.0",

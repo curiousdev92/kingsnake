@@ -7,6 +7,7 @@ import {
   type Input,
   type SimConfig,
 } from '@snake/game-core';
+import { PlayerInput } from './PlayerInput';
 import { Renderer } from './Renderer';
 
 export const PLAYER_ID = 1;
@@ -32,28 +33,25 @@ export class Sandbox {
   private state!: GameState;
   private acc = 0;
   private placement = 0;
-  private readonly input: Input = { targetAngle: 0, boost: false };
-  private readonly keys = new Set<string>();
-  private pointer: { x: number; y: number } | null = null;
-  private pointerBoost = false;
+  private readonly player: PlayerInput;
   private readonly inputs = new Map<number, Input>();
-  private disposers: (() => void)[] = [];
+  private readonly onTick = (t: { deltaMS: number }) => this.frame(t.deltaMS / 1000);
 
   constructor(
     private readonly renderer: Renderer,
     private readonly onStats: (s: SandboxStats) => void,
     public botCount = 7,
   ) {
+    this.player = new PlayerInput(renderer.canvas);
     this.restart();
-    this.bindInput(renderer.canvas);
-    renderer.app.ticker.add((t) => this.frame(t.deltaMS / 1000));
+    renderer.app.ticker.add(this.onTick);
   }
 
   restart(): void {
     const players = [{ name: 'You' }, ...Array.from({ length: this.botCount }, (_, i) => ({ name: `Bot ${i + 1}`, isBot: true }))];
     this.state = createGame(players, this.cfg, (Math.random() * 2 ** 31) | 0);
     this.prev = this.state;
-    this.input.targetAngle = this.state.snakes[0]!.angle;
+    this.player.input.targetAngle = this.state.snakes[0]!.angle;
     this.placement = 0;
     this.acc = 0;
   }
@@ -71,10 +69,9 @@ export class Sandbox {
   }
 
   private tick(): void {
-    this.updatePlayerInput();
     this.inputs.clear();
     botInputs(this.state, this.cfg, this.inputs);
-    this.inputs.set(PLAYER_ID, { ...this.input });
+    this.inputs.set(PLAYER_ID, { ...this.player.sample() });
     this.prev = this.state;
     this.state = step(this.state, this.inputs, this.cfg);
 
@@ -100,47 +97,8 @@ export class Sandbox {
     });
   }
 
-  private updatePlayerInput(): void {
-    const k = this.keys;
-    const dx = (k.has('d') || k.has('arrowright') ? 1 : 0) - (k.has('a') || k.has('arrowleft') ? 1 : 0);
-    const dy = (k.has('s') || k.has('arrowdown') ? 1 : 0) - (k.has('w') || k.has('arrowup') ? 1 : 0);
-    if (dx !== 0 || dy !== 0) {
-      this.input.targetAngle = Math.atan2(dy, dx);
-    } else if (this.pointer) {
-      // The camera keeps the player's head at the screen center.
-      const c = this.renderer.canvas.getBoundingClientRect();
-      this.input.targetAngle = Math.atan2(this.pointer.y - c.height / 2, this.pointer.x - c.width / 2);
-    }
-    this.input.boost = this.pointerBoost || k.has(' ');
-  }
-
-  private bindInput(canvas: HTMLCanvasElement): void {
-    const on = <K extends keyof WindowEventMap>(target: Window | HTMLElement, type: K, fn: (e: WindowEventMap[K]) => void) => {
-      target.addEventListener(type, fn as EventListener);
-      this.disposers.push(() => target.removeEventListener(type, fn as EventListener));
-    };
-    on(canvas, 'pointermove', (e) => {
-      const r = canvas.getBoundingClientRect();
-      this.pointer = { x: e.clientX - r.left, y: e.clientY - r.top };
-    });
-    on(canvas, 'pointerdown', (e) => {
-      if (e.button === 0) this.pointerBoost = true;
-    });
-    on(window, 'pointerup', () => (this.pointerBoost = false));
-    on(canvas, 'contextmenu', (e) => e.preventDefault());
-    on(window, 'keydown', (e) => {
-      this.keys.add(e.key.toLowerCase());
-      if (e.key === ' ') e.preventDefault();
-    });
-    on(window, 'keyup', (e) => this.keys.delete(e.key.toLowerCase()));
-    on(window, 'blur', () => {
-      this.keys.clear();
-      this.pointerBoost = false;
-    });
-  }
-
   destroy(): void {
-    for (const d of this.disposers) d();
-    this.disposers = [];
+    this.renderer.app.ticker.remove(this.onTick);
+    this.player.destroy();
   }
 }

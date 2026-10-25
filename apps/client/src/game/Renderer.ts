@@ -1,4 +1,4 @@
-import type { GameState, Snake, Vec2 } from '@snake/game-core';
+import type { Vec2 } from '@snake/game-core';
 import { Application, Container, Graphics } from 'pixi.js';
 
 // Phase 1 placeholder look: plain white circles. Real skins plug in via atlases later.
@@ -14,6 +14,25 @@ const COLORS = {
 };
 const GRID = 64;
 const GRID_EXTENT = 4000;
+
+/** What the renderer needs from a snake. Satisfied by game-core's Snake and netcode's ViewSnake. */
+export interface RenderSnake {
+  id: number;
+  alive: boolean;
+  head: Vec2;
+  angle: number;
+  radius: number;
+  mass: number;
+  boosting: boolean;
+  segments: Vec2[];
+}
+
+/** One moment of the world. Satisfied by game-core's GameState and by netcode views plus pellets. */
+export interface RenderWorld {
+  snakes: readonly RenderSnake[];
+  pellets: readonly { x: number; y: number; value: number }[];
+  arena: { center: Vec2; radius: number; targetRadius: number };
+}
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
@@ -46,10 +65,10 @@ export class Renderer {
   }
 
   /** Draws the world between two sim states; `alpha` in [0, 1) is progress from prev to cur. */
-  render(prev: GameState, cur: GameState, alpha: number, focusId: number): void {
+  render(prev: RenderWorld, cur: RenderWorld, alpha: number, focusId: number | null): void {
     const prevById = new Map(prev.snakes.map((s) => [s.id, s]));
     const focus = cur.snakes.find((s) => s.id === focusId);
-    const focusPrev = prevById.get(focusId);
+    const focusPrev = focusId === null ? undefined : prevById.get(focusId);
 
     // Camera follows the focused head and zooms out as it grows; holds still once dead.
     if (focus?.alive && focusPrev) {
@@ -76,6 +95,13 @@ export class Renderer {
     }
   }
 
+  /** Clears the world (between matches) but keeps the grid. */
+  clear(): void {
+    this.arena.clear();
+    this.pellets.clear();
+    this.snakes.clear();
+  }
+
   private drawGrid(): void {
     const g = this.grid;
     for (let v = -GRID_EXTENT; v <= GRID_EXTENT; v += GRID) {
@@ -85,7 +111,7 @@ export class Renderer {
     g.stroke({ width: 1, color: COLORS.grid });
   }
 
-  private drawArena(radius: number, s: GameState): void {
+  private drawArena(radius: number, s: RenderWorld): void {
     const { x, y } = s.arena.center;
     const g = this.arena.clear();
     // Storm: everything outside the circle is hatched over.
@@ -97,7 +123,7 @@ export class Renderer {
     }
   }
 
-  private drawPellets(s: GameState): void {
+  private drawPellets(s: RenderWorld): void {
     const g = this.pellets.clear();
     for (const p of s.pellets) {
       g.circle(p.x, p.y, Math.min(14, 3 + Math.sqrt(p.value) * 2));
@@ -105,7 +131,7 @@ export class Renderer {
     g.fill({ color: COLORS.pellet, alpha: 0.85 });
   }
 
-  private drawSnake(g: Graphics, prev: Snake, cur: Snake, alpha: number, color: number): void {
+  private drawSnake(g: Graphics, prev: RenderSnake, cur: RenderSnake, alpha: number, color: number): void {
     const r = lerp(prev.radius, cur.radius, alpha);
     const segs = cur.segments;
     // Segment k sits at the same distance behind the head in both states, so lerp index-wise.

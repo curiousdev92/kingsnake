@@ -3,10 +3,11 @@ import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { Gallery } from './Gallery';
+import { OnlineApp } from './OnlineApp';
 
 applyTheme(themeMono);
 
-/** `#ui` shows the ui-kit gallery; anything else is the game sandbox. */
+/** `#ui` shows the ui-kit gallery, `#online` plays against the game-server; anything else is the offline sandbox. */
 function Root() {
   const [hash, setHash] = useState(location.hash);
   useEffect(() => {
@@ -14,7 +15,9 @@ function Root() {
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
-  return hash === '#ui' ? <Gallery /> : <App />;
+  if (hash === '#ui') return <Gallery />;
+  if (hash === '#online') return <OnlineApp />;
+  return <App />;
 }
 
 createRoot(document.getElementById('root')!).render(

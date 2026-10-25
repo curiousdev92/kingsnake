@@ -1,6 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "client", "runtimeExecutable": "pnpm", "runtimeArgs": ["--filter", "@snake/client", "dev"], "port": 5173 }
+    { "name": "client", "runtimeExecutable": "pnpm", "runtimeArgs": ["--filter", "@snake/client", "dev"], "port": 5173 },
+    { "name": "game-server", "runtimeExecutable": "pnpm", "runtimeArgs": ["--filter", "@snake/game-server", "dev"], "port": 2567 }
   ]
 }

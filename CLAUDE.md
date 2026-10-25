@@ -10,7 +10,8 @@ pnpm 12 + Turborepo. Run from the repo root.
 
 ```bash
 pnpm install
-pnpm dev                 # Vite dev server for the client sandbox (http://localhost:5173)
+pnpm dev                 # client (http://localhost:5173) + game-server (ws://localhost:2567)
+pnpm dev:client          # client only (offline sandbox, #ui gallery)
 pnpm test                # all Vitest suites via turbo
 pnpm typecheck           # tsc --noEmit in every package
 pnpm build
@@ -24,7 +25,11 @@ pnpm --filter @snake/game-core exec vitest run -t "head-to-head"
 pnpm --filter @snake/game-core exec vitest        # watch mode
 ```
 
-There is no lint setup yet. pnpm 12 blocks dependency build scripts; allowed ones are listed under `allowBuilds` in `pnpm-workspace.yaml` (currently esbuild).
+Client routes: `/` offline sandbox, `#online` online play (`?bots=7` adds bots so one player can start, `?name=`, `?server=ws://…`), `#ui` component gallery. To test two players, open `#online` in two tabs. Background tabs stop requestAnimationFrame, so they stop rendering (network still runs on timers).
+
+The game-server integration test (`apps/game-server/test/room.integration.test.ts`) boots a real Colyseus server on a random port and connects SDK clients; it takes about 7 s.
+
+There is no lint setup yet. pnpm 12 blocks dependency build scripts; `allowBuilds` in `pnpm-workspace.yaml` allows esbuild and denies `msgpackr-extract` (optional native addon). Depend on `@colyseus/core` + `@colyseus/ws-transport`, not the `colyseus` meta-package: it pulls a git-hosted uWebSockets.js that pnpm's `blockExoticSubdeps` rejects. The client SDK is `@colyseus/sdk` (0.18), not `colyseus.js`.
 
 ## Architecture
 
@@ -49,13 +54,25 @@ Pure TS, zero dependencies, no I/O, no rendering. It will be reused for server a
 - Motion durations and easings come from `motion.*` tokens; `motion.ts` has `useCountUp` and the shared keyframes.
 - `http://localhost:5173/#ui` is a gallery of every component, with a "Try demo art" toggle that swaps in a generated SVG manifest to check skinning.
 
-### apps/client: Pixi sandbox + React shell
-- `game/Sandbox.ts` owns the loop: a fixed-step accumulator on the Pixi ticker runs `step()` with player and bot inputs, then calls `Renderer.render(prev, cur, alpha)` at display rate.
-- `game/Renderer.ts` draws with Pixi v8 `Graphics`, rebuilt every frame (placeholder white circles). The camera keeps the player's head at the screen center, which is why steering uses the pointer's offset from the center.
-- React (`App.tsx`) is the UI layer only. Sandbox pushes HUD stats into a Zustand store (`store.ts`). The Tune panel edits `sandbox.cfg` live.
+### Networking: protocol, game-server, netcode
+The server is authoritative. Hot-path traffic is custom binary over Colyseus `sendBytes`/`onMessageBytes`; Colyseus Schema state is not used. Only the match lifecycle goes as JSON (`'match'` message, `MatchMsg`).
+
+- `packages/protocol` (`messages.ts`): codecs for `Input` and `Ping` (client→server) and `Snapshot`, `Events` and `Pong` (server→client). Positions are i16 at 1/8 unit, angles u16. `ByteReader` honours `byteOffset`, because transports hand over subarrays.
+- Snapshots (every tick, 30 Hz, unreliable in spirit) carry each living snake's head, angle, mass and boost. Bodies are sent only as keyframes: everyone on a client's first snapshot after join, reconnect or match start (`needsFull`), plus one per snake every 30 ticks, staggered by id. A snake missing from a snapshot is dead.
+- Events (reliable) carry pellet adds/removes (diffed from consecutive states in `Match.diff`) and deaths. `reset: true` means "replace all pellets"; it is sent on join and at match start.
+- `apps/game-server`: `Match.ts` is the Colyseus-free core. It owns the `GameState`, the latest input per snake (stale `seq` ignored) and fixed tick timing against server time (`tickTime`, catch-up capped at 8 steps). It also turns state into protocol messages. `ArenaRoom.ts` runs the lifecycle waiting → countdown (3 s) → playing → ended (5 s) → waiting. A room starts at `minPlayers` humans (default 2), or at 1 when created with `bots`; rooms are `filterBy(['bots', 'minPlayers'])`. Dropped clients get 10 s to reconnect. A leaver's snake is handed to the bot AI (`convertToBot`).
+- `packages/netcode`: `ClockSync` (min-RTT ping samples), `SnapshotBuffer` (interpolation with capped extrapolation), `NetworkSimulator` (per direction; reliable messages are delayed but kept in order and never dropped, unreliable ones can be dropped or reordered) and `RemoteWorld`. `RemoteWorld` rebuilds bodies by appending each snapshot's head to a path and resampling it with game-core's `sampleSegments`; keyframes replace the path. Pellet and death events are applied only when render time reaches them.
+- Client prediction and reconciliation (PLAN.md build step 4) are not built yet. Your own snake is interpolated like everyone else's, so it lags by RTT + interp delay. `lastSeq` is already echoed in snapshots for this.
+
+### apps/client: Pixi + React shell
+- `game/Sandbox.ts` (offline) runs a fixed-step accumulator on the Pixi ticker, calling `step()` with player and bot inputs, then `Renderer.render(prev, cur, alpha)` at display rate.
+- `game/OnlineGame.ts` (online) sends inputs and pings from `setInterval` and renders from the Pixi ticker. Render time is `serverNow - interpDelayMs`. All traffic goes through the two `NetworkSimulator`s, controlled from the Net panel.
+- `game/PlayerInput.ts` is the shared mouse/keyboard → `Input` mapping.
+- `game/Renderer.ts` draws any `RenderWorld` (game-core `GameState`, or a netcode `WorldView` plus pellets) with Pixi v8 `Graphics`, rebuilt every frame (placeholder white circles). The camera keeps the focused head at the screen center, which is why steering uses the pointer's offset from the center.
+- React (`App.tsx`, `OnlineApp.tsx`) is the UI layer only. HUD stats go through Zustand stores. The Tune panel edits `sandbox.cfg` live; online, the server sends its `SimConfig` in `MatchMsg`.
 
 ## Constraints from PLAN.md
-- Networking is not built yet. When it is: authoritative server, client prediction for your own snake, interpolation for others, custom binary snapshots (not Colyseus Schema). `game-core`, `netcode` and `protocol` must not depend on the transport.
-- Planned but not yet created: `apps/game-server`, `apps/api`, `packages/{netcode, game-modes, protocol}`. A new game mode should be one file in `game-modes`.
+- `game-core`, `netcode` and `protocol` must not depend on the transport (Colyseus is only in `apps/game-server` and `OnlineGame.ts`). If Colyseus fights the custom netcode, PLAN.md allows replacing it with a thin `ws` server.
+- Planned but not yet created: `apps/api`, `packages/game-modes`. A new game mode should be one file in `game-modes`.
 - Cosmetics only, no pay-to-win. Rewards are granted server-side; the client never claims them.
 - Original art only. Snake skins are data (atlas + config), not code.

@@ -3,3 +3,5 @@ packages:
   - packages/*
 allowBuilds:
   esbuild: true
+  # Optional native msgpack accelerator; the pure-JS fallback is fine.
+  msgpackr-extract: false

@@ -10,9 +10,12 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@colyseus/sdk": "^0.18.0",
     "@snake/assets": "workspace:*",
     "@snake/design-tokens": "workspace:*",
     "@snake/game-core": "workspace:*",
+    "@snake/netcode": "workspace:*",
+    "@snake/protocol": "workspace:*",
     "@snake/ui-kit": "workspace:*",
     "pixi.js": "^8.13.0",
     "react": "^19.1.0",

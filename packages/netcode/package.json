@@ -1,0 +1,21 @@
+{
+  "name": "@snake/netcode",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@snake/game-core": "workspace:*",
+    "@snake/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@snake/config": "workspace:*",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}
