@@ -19,6 +19,7 @@ import {
   type SnapshotMsg,
 } from '@snake/protocol';
 import { PlayerInput } from './PlayerInput';
+import { haptic } from '../haptics';
 import type { Renderer } from './Renderer';
 
 const INPUT_INTERVAL_MS = 1000 / 30;
@@ -285,7 +286,9 @@ export class OnlineGame {
     const renderTime = this.clock.serverNow(now) - this.interpDelayMs;
     const you = this.match?.you ?? null;
     for (const d of this.world.applyEventsUntil(renderTime)) {
+      if (you !== null && d.killerId === you && d.snakeId !== you) haptic('kill');
       if (d.snakeId !== you) continue;
+      haptic('death');
       this.placement = (this.world.buffer.latest?.snakes.length ?? 0) + 1;
       const killer = this.match?.roster.find((r) => r.id === d.killerId)?.name ?? 'someone';
       this.deathReason = d.cause === 'arena' ? 'left the arena' : d.cause === 'head' ? `hit ${killer} head-on` : `ran into ${killer}`;

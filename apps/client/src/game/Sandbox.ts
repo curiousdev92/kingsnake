@@ -9,6 +9,7 @@ import {
 } from '@snake/game-core';
 import { DEFAULT_SKIN, SKINS } from '@snake/meta';
 import { useAccount } from '../account';
+import { haptic } from '../haptics';
 import { PlayerInput } from './PlayerInput';
 import { Renderer } from './Renderer';
 
@@ -81,9 +82,12 @@ export class Sandbox {
     this.state = step(this.state, this.inputs, this.cfg);
 
     for (const e of this.state.events) {
-      if (e.type === 'death' && e.snakeId === PLAYER_ID) {
+      if (e.type === 'eat' && e.snakeId === PLAYER_ID) haptic('eat');
+      else if (e.type === 'death' && e.snakeId === PLAYER_ID) {
         this.placement = this.state.snakes.filter((s) => s.alive).length + 1;
-      }
+        haptic('death');
+      } else if (e.type === 'death' && e.killerId === PLAYER_ID) haptic('kill');
+      else if (e.type === 'win' && e.snakeId === PLAYER_ID) haptic('win');
     }
     this.emitStats();
   }

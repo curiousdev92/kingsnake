@@ -7,9 +7,14 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "cap:sync": "vite build && cap sync",
+    "cap:android": "cap open android",
+    "cap:ios": "cap open ios"
   },
   "dependencies": {
+    "@capacitor/core": "^7.6.9",
+    "@capacitor/haptics": "^7.0.5",
     "@colyseus/sdk": "^0.18.0",
     "@snake/assets": "workspace:*",
     "@snake/design-tokens": "workspace:*",
@@ -24,6 +29,9 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/cli": "^7.6.9",
+    "@capacitor/ios": "^7.6.9",
     "@snake/config": "workspace:*",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
