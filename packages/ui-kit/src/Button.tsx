@@ -1,14 +1,19 @@
+import type { ButtonState } from '@snake/assets';
 import { token } from '@snake/design-tokens';
 import { useState, type ButtonHTMLAttributes, type CSSProperties } from 'react';
-import { nineSliceStyle, type Skin } from './skin';
+import { nineSliceStyle, resolveSkin, type Skin } from './skin';
 
+export type { ButtonState } from '@snake/assets';
 export type ButtonVariant = 'primary' | 'secondary' | 'danger';
-export type ButtonState = 'normal' | 'pressed' | 'disabled';
+
+const STATES: readonly ButtonState[] = ['normal', 'pressed', 'disabled'];
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
-  /** 9-slice art per state. Without it the button renders from tokens only. */
+  /** 9-slice art per state. Defaults to the manifest's `button.<variant>.*`; without art it renders from tokens. */
   skin?: Skin<ButtonState>;
+  /** Manifest prefix to look up art under. IconButton uses `button.icon`. */
+  skinPrefix?: string;
 }
 
 const fallback: Record<ButtonVariant, CSSProperties> = {
@@ -17,7 +22,17 @@ const fallback: Record<ButtonVariant, CSSProperties> = {
   danger: { background: token('color.danger'), color: token('color.textOnDanger') },
 };
 
-export function Button({ variant = 'primary', skin, disabled, style, onPointerDown, onPointerUp, onPointerLeave, ...rest }: ButtonProps) {
+export function Button({
+  variant = 'primary',
+  skin,
+  skinPrefix,
+  disabled,
+  style,
+  onPointerDown,
+  onPointerUp,
+  onPointerLeave,
+  ...rest
+}: ButtonProps) {
   const [pressed, setPressed] = useState(false);
   const state: ButtonState = disabled ? 'disabled' : pressed ? 'pressed' : 'normal';
 
@@ -30,7 +45,7 @@ export function Button({ variant = 'primary', skin, disabled, style, onPointerDo
     transform: pressed ? `scale(${token('motion.press.scale')})` : undefined,
     transition: `transform ${token('motion.press.duration')} ${token('motion.press.easing')}`,
   };
-  const skinned = nineSliceStyle(skin, state);
+  const skinned = nineSliceStyle(resolveSkin(skin, skinPrefix ?? `button.${variant}`, STATES), state);
   const look: CSSProperties = skinned ?? {
     ...fallback[variant],
     border: `${token('border.width')} solid ${token('color.border')}`,

@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@snake/assets": "workspace:*",
     "@snake/design-tokens": "workspace:*",
     "@snake/game-core": "workspace:*",
     "@snake/ui-kit": "workspace:*",

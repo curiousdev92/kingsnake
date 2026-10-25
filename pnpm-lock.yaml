@@ -178,6 +178,9 @@ importers:
 
   apps/client:
     dependencies:
+      '@snake/assets':
+        specifier: workspace:*
+        version: link:../../packages/assets
       '@snake/design-tokens':
         specifier: workspace:*
         version: link:../../packages/design-tokens
@@ -219,6 +222,18 @@ importers:
         specifier: ^7.1.0
         version: 7.3.7
 
+  packages/assets:
+    devDependencies:
+      '@snake/config':
+        specifier: workspace:*
+        version: link:../config
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.7
+
   packages/config: {}
 
   packages/design-tokens:
@@ -244,6 +259,9 @@ importers:
 
   packages/ui-kit:
     dependencies:
+      '@snake/assets':
+        specifier: workspace:*
+        version: link:../assets
       '@snake/design-tokens':
         specifier: workspace:*
         version: link:../design-tokens
@@ -254,12 +272,21 @@ importers:
       '@types/react':
         specifier: ^19.1.0
         version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.1.0
+        version: 19.3.0(@types/react@19.3.0)
       react:
         specifier: ^19.1.0
         version: 19.3.1
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.3.1(react@19.3.1)
       typescript:
         specifier: ^5.8.0
         version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.7
 
 packages:
 

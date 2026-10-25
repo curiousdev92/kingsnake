@@ -17,6 +17,10 @@ export interface Theme {
     textOnDanger: string;
     disabled: string;
     textDisabled: string;
+    /** Backdrop behind modals. */
+    overlay: string;
+    /** Empty part of progress bars. */
+    track: string;
   };
   radius: { button: string; panel: string; chip: string };
   space: { xs: string; sm: string; md: string; lg: string; xl: string };
@@ -46,6 +50,8 @@ export const themeMono: Theme = {
     textOnDanger: '#ffffff',
     disabled: '#000000',
     textDisabled: '#5a5a5a',
+    overlay: 'rgba(0, 0, 0, 0.7)',
+    track: '#222222',
   },
   radius: { button: '10px', panel: '14px', chip: '999px' },
   space: { xs: '4px', sm: '8px', md: '12px', lg: '20px', xl: '32px' },
