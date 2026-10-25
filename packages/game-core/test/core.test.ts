@@ -246,5 +246,5 @@ describe('determinism and bots', () => {
     const cfg = makeConfig();
     const s = playBots(3, 30 * 240, cfg);
     expect(s.finished).toBe(true);
-  });
+  }, 30_000); // simulates up to 4 minutes of an 8-bot match
 });

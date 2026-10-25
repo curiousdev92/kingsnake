@@ -5,8 +5,9 @@ import { ArenaRoom } from './ArenaRoom';
 const port = Number(process.env.PORT ?? 2567);
 
 const server = new Server({ transport: new WebSocketTransport() });
-// Rooms with different bot settings never share a match.
-server.define('arena', ArenaRoom).filterBy(['bots', 'minPlayers']);
+// Quick play uses joinOrCreate('arena'); private rooms are created with { private: true }
+// and are invisible to matchmaking (setPrivate), joined by code with joinById.
+server.define('arena', ArenaRoom);
 
 await server.listen(port);
 console.log(`game-server listening on ws://localhost:${port}`);

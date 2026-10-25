@@ -205,6 +205,24 @@ export interface RosterEntry {
   isBot: boolean;
 }
 
+export interface LobbyPlayer {
+  name: string;
+  host: boolean;
+  you: boolean;
+}
+
+export interface LobbyInfo {
+  /** Private rooms are joined by code and started by the host; public ones by matchmaking. */
+  private: boolean;
+  /** Room code (the room id). Shareable for private rooms. */
+  code: string;
+  youAreHost: boolean;
+  players: LobbyPlayer[];
+  maxPlayers: number;
+  /** Bots that will join the next match. */
+  bots: number;
+}
+
 export interface MatchMsg {
   phase: MatchPhase;
   /** Server time the countdown ends (countdown) or the next match starts (ended). */
@@ -213,8 +231,18 @@ export interface MatchMsg {
   you: number | null;
   roster: RosterEntry[];
   winnerId: number | null;
-  /** Humans still needed before the countdown starts (waiting). */
-  needPlayers: number;
+  lobby: LobbyInfo;
   /** The server's simulation config, so client-side body rebuilding matches. */
   config: SimConfig;
 }
+
+/** Client -> server JSON messages for private-room hosts. */
+export const START_MESSAGE = 'start';
+export const SETTINGS_MESSAGE = 'settings';
+
+export interface SettingsMsg {
+  bots: number;
+}
+
+/** Hard cap on snakes in one match (humans + bots). */
+export const MAX_SNAKES = 16;

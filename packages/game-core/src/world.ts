@@ -8,14 +8,18 @@ export interface PlayerSpec {
   isBot?: boolean;
 }
 
-/** Creates a fresh match with players spread evenly on a ring, facing the center. */
+/**
+ * Creates a fresh match with players spread evenly on a ring. Everyone faces along the
+ * ring in the same direction, so nobody starts on a collision course; facing the center
+ * made every match open with a pile-up.
+ */
 export function createGame(players: PlayerSpec[], cfg: SimConfig, seed = 1): GameState {
   const radius = cfg.arenaBaseRadius + cfg.arenaPerPlayer * players.length;
   const ring = radius * 0.6;
   const snakes: Snake[] = players.map((p, i) => {
     const a = (i / players.length) * Math.PI * 2;
     const head = { x: Math.cos(a) * ring, y: Math.sin(a) * ring };
-    return createSnake(i + 1, p.name, head, a + Math.PI, cfg, p.isBot ?? false);
+    return createSnake(i + 1, p.name, head, a + Math.PI / 2, cfg, p.isBot ?? false);
   });
   const state: GameState = {
     tick: 0,

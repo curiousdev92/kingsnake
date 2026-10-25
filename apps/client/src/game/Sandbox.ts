@@ -51,7 +51,7 @@ export class Sandbox {
     const players = [{ name: 'You' }, ...Array.from({ length: this.botCount }, (_, i) => ({ name: `Bot ${i + 1}`, isBot: true }))];
     this.state = createGame(players, this.cfg, (Math.random() * 2 ** 31) | 0);
     this.prev = this.state;
-    this.player.input.targetAngle = this.state.snakes[0]!.angle;
+    this.player.resetAim(this.state.snakes[0]!.angle);
     this.placement = 0;
     this.acc = 0;
   }

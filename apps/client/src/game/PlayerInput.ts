@@ -37,6 +37,15 @@ export class PlayerInput {
     });
   }
 
+  /**
+   * Starts a new life: aim along `angle` and forget the old pointer position, so the
+   * snake keeps its spawn heading until the player actually moves the mouse or presses a key.
+   */
+  resetAim(angle: number): void {
+    this.input.targetAngle = angle;
+    this.pointer = null;
+  }
+
   /** Reads the current devices into `input` and returns it. */
   sample(): Input {
     const k = this.keys;

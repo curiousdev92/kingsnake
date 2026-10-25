@@ -4,12 +4,15 @@ import { AdaptiveDelay, ClockSync, NetworkSimulator, Predictor, RemoteWorld, typ
 import {
   MATCH_MESSAGE,
   Msg,
+  SETTINGS_MESSAGE,
+  START_MESSAGE,
   decodeEvents,
   decodePong,
   decodeSnapshot,
   encodeInput,
   encodePing,
   type MatchMsg,
+  type LobbyInfo,
   type MatchPhase,
   type SnapshotMsg,
 } from '@snake/protocol';
@@ -22,10 +25,13 @@ const NET_TIMER_MS = 5;
 const PING_INTERVAL_MS = 1000;
 const STATS_INTERVAL_MS = 100;
 
+/** How to get into a room: matchmaking, a new private room, or a private room's code. */
+export type JoinRequest = { kind: 'quick' } | { kind: 'create' } | { kind: 'code'; code: string };
+
 export interface OnlineOptions {
   url: string;
   name: string;
-  bots: number;
+  join: JoinRequest;
 }
 
 export interface OnlineStats {
@@ -34,7 +40,7 @@ export interface OnlineStats {
   phase: MatchPhase;
   /** Seconds left in countdown/results, or null. */
   phaseSecondsLeft: number | null;
-  needPlayers: number;
+  lobby: LobbyInfo | null;
   you: number | null;
   youAlive: boolean;
   placement: number;
@@ -110,6 +116,16 @@ export class OnlineGame {
     void this.connect();
   }
 
+  /** Private room host: start the next match. */
+  start(): void {
+    this.room?.send(START_MESSAGE);
+  }
+
+  /** Private room host: bots for the next match. */
+  setBots(bots: number): void {
+    this.room?.send(SETTINGS_MESSAGE, { bots });
+  }
+
   get interpDelayMs(): number {
     return this.autoInterp ? this.adaptive.delayMs : this.manualInterpMs;
   }
@@ -124,7 +140,14 @@ export class OnlineGame {
   private async connect(): Promise<void> {
     try {
       const client = new Client(this.opts.url);
-      const room = await client.joinOrCreate('arena', { name: this.opts.name, bots: this.opts.bots });
+      const join = this.opts.join;
+      const options = { name: this.opts.name };
+      const room =
+        join.kind === 'quick'
+          ? await client.joinOrCreate('arena', options)
+          : join.kind === 'create'
+            ? await client.create('arena', { ...options, private: true })
+            : await client.joinById(join.code, options);
       if (this.destroyed) {
         void room.leave();
         return;
@@ -165,7 +188,13 @@ export class OnlineGame {
       });
     } catch (e) {
       this.connection = 'error';
-      this.error = `Could not reach ${this.opts.url}: ${e instanceof Error ? e.message : String(e)}`;
+      const message = e instanceof Error ? e.message : String(e);
+      const join = this.opts.join;
+      // A bad or locked code comes back as a matchmaking error; a dead server as a fetch failure.
+      this.error =
+        join.kind === 'code' && /not found|locked/i.test(message)
+          ? `No open room with code ${join.code}`
+          : `Could not reach ${this.opts.url}: ${message}`;
     }
   }
 
@@ -180,6 +209,8 @@ export class OnlineGame {
       this.predictor.reset(); // dead: the server's word is final
       return;
     }
+    // First snapshot of this life: steer along the spawn heading until the player aims.
+    if (!this.predictor.active) this.player.resetAim(own.angle);
     this.predictor.reconcile({ snake: own, path: this.world.pathOf(you)!, arenaRadius: msg.arenaRadius, lastSeq: msg.lastSeq });
   }
 
@@ -279,7 +310,7 @@ export class OnlineGame {
       error: this.error,
       phase: m?.phase ?? 'waiting',
       phaseSecondsLeft: m?.phaseEndsAt != null && this.clock.synced ? Math.max(0, Math.ceil((m.phaseEndsAt - serverNow) / 1000)) : null,
-      needPlayers: m?.needPlayers ?? 0,
+      lobby: m?.lobby ?? null,
       you: m?.you ?? null,
       youAlive: this.lastSample.you,
       placement: this.placement,
