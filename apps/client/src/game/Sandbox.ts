@@ -7,6 +7,8 @@ import {
   type Input,
   type SimConfig,
 } from '@snake/game-core';
+import { DEFAULT_SKIN, SKINS } from '@snake/meta';
+import { useAccount } from '../account';
 import { PlayerInput } from './PlayerInput';
 import { Renderer } from './Renderer';
 
@@ -52,6 +54,9 @@ export class Sandbox {
     this.state = createGame(players, this.cfg, (Math.random() * 2 ** 31) | 0);
     this.prev = this.state;
     this.player.resetAim(this.state.snakes[0]!.angle);
+    // Your equipped skin; bots get random ones.
+    const mine = useAccount.getState().profile?.equippedSkin ?? DEFAULT_SKIN;
+    this.renderer.setSkins(new Map(this.state.snakes.map((s) => [s.id, s.id === PLAYER_ID ? mine : SKINS[Math.floor(Math.random() * SKINS.length)]!.id])));
     this.placement = 0;
     this.acc = 0;
   }

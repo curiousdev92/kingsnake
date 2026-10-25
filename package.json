@@ -3,7 +3,7 @@
   "private": true,
   "packageManager": "pnpm@12.8.1",
   "scripts": {
-    "dev": "turbo run dev --filter=@snake/client --filter=@snake/game-server",
+    "dev": "turbo run dev --filter=@snake/client --filter=@snake/game-server --filter=@snake/api",
     "build": "turbo run build",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",

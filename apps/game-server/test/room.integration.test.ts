@@ -15,14 +15,29 @@ import {
   type MatchMsg,
   type SnapshotMsg,
 } from '@snake/protocol';
+import { signPlayerToken } from '@snake/auth';
+import type { Grant, MatchReport } from '@snake/meta';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ArenaRoom, ROOM_SIZE, timing } from '../src/ArenaRoom';
+import type { MetaService } from '../src/meta';
+
+// Fake API: one known account, and a log of reported matches.
+const ACCOUNT = '11111111-2222-3333-4444-555555555555';
+const reports: MatchReport[] = [];
+const fakeMeta: MetaService = {
+  lookupPlayer: async (id) => (id === ACCOUNT ? { name: 'Pro', skin: 'ember' } : null),
+  reportMatch: async (report) => {
+    reports.push(report);
+    return Object.fromEntries(report.results.map((r) => [r.playerId, { xp: 42, coins: 7, levelBefore: 1, levelAfter: 1 }]));
+  },
+};
 
 const PORT = 25000 + Math.floor(Math.random() * 1000);
 const URL = `ws://localhost:${PORT}`;
 let server: Server;
 
 beforeAll(async () => {
+  ArenaRoom.meta = fakeMeta;
   Object.assign(timing, { lobbyWaitMs: 600, fullLobbyMs: 200, countdownMs: 300, resultsMs: 500 });
   server = new Server({ transport: new WebSocketTransport() });
   server.define('arena', ArenaRoom);
@@ -155,5 +170,46 @@ describe('private rooms', () => {
 
   it('rejects unknown codes', async () => {
     await expect(joinCode('ZZZZZ', 'Nobody')).rejects.toThrow();
+  });
+});
+
+describe('accounts and rewards', () => {
+  it('uses the account name and skin, and forwards match rewards', async () => {
+    const token = await signPlayerToken(ACCOUNT);
+    const room = await new Client(URL).create('arena', { name: 'typed-name', token, private: true });
+    const me = record(room);
+    const rewards: Grant[] = [];
+    room.onMessage('rewards', (g: Grant) => rewards.push(g));
+
+    await until(() => me.matches.length > 0, 2000);
+    expect(me.last().lobby.players[0]!.name).toBe('Pro');
+
+    room.send(SETTINGS_MESSAGE, { bots: 1 });
+    await until(() => me.last().lobby.bots === 1, 2000);
+    room.send(START_MESSAGE);
+    await until(() => me.last().phase === 'playing', 3000);
+    const roster = me.last().roster;
+    const mine = roster.find((r) => r.id === me.last().you)!;
+    expect(mine).toMatchObject({ name: 'Pro', skin: 'ember', isBot: false });
+    expect(roster.find((r) => r.isBot)!.skin).toBeTruthy();
+
+    // Steer straight out of the arena: the bot wins and the match is reported.
+    const out = setInterval(() => room.sendBytes(Msg.Input, encodeInput({ seq: Date.now(), targetAngle: 0, boost: true })), 1000 / 30);
+    await until(() => rewards.length > 0, 8000);
+    clearInterval(out);
+
+    expect(rewards[0]).toEqual({ xp: 42, coins: 7, levelBefore: 1, levelAfter: 1 });
+    const report = reports.at(-1)!;
+    expect(report.totalPlayers).toBe(2);
+    expect(report.results).toEqual([{ playerId: ACCOUNT, placement: 2, kills: 0, survivalMs: expect.any(Number) }]);
+    await room.leave();
+  }, 15000);
+
+  it('treats a bad token as anonymous: plays, but is never reported', async () => {
+    const room = await new Client(URL).create('arena', { name: 'Anon', token: 'forged', private: true });
+    const me = record(room);
+    await until(() => me.matches.length > 0, 2000);
+    expect(me.last().lobby.players[0]!.name).toBe('Anon');
+    await room.leave();
   });
 });

@@ -3,29 +3,14 @@ import { token } from '@snake/design-tokens';
 import { Button, Panel } from '@snake/ui-kit';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { create } from 'zustand';
+import { DailyReward, ProfileCard, ShopButton } from './AccountUi';
+import { refreshProfile, rename, savedName, saveName, sessionToken, useAccount } from './account';
 import { OnlineGame, type JoinRequest, type OnlineStats } from './game/OnlineGame';
 import { Renderer } from './game/Renderer';
 
 const useOnline = create<OnlineStats | null>(() => null);
 
-const NAME_KEY = 'snake.name';
 const CODE_LENGTH = 5;
-
-// The name is a per-device convenience; storage can be unavailable (private mode), so never rely on it.
-function loadName(): string {
-  try {
-    return localStorage.getItem(NAME_KEY) ?? '';
-  } catch {
-    return '';
-  }
-}
-function saveName(name: string): void {
-  try {
-    localStorage.setItem(NAME_KEY, name);
-  } catch {
-    // ignore
-  }
-}
 
 const normalizeCode = (c: string) => c.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, CODE_LENGTH);
 const serverUrl = () => new URLSearchParams(location.search).get('server') ?? `ws://${location.hostname}:2567`;
@@ -49,20 +34,36 @@ function inviteLink(code: string): string {
  * Open with `#online`; `?room=CODE#online` joins a private room directly; `?server=` overrides the URL.
  */
 export function OnlineApp() {
-  const [name, setName] = useState(loadName);
+  const profile = useAccount((s) => s.profile);
+  const [name, setName] = useState(savedName);
   const [fallbackName] = useState(() => `Player${Math.floor(Math.random() * 900 + 100)}`);
   const [join, setJoin] = useState<JoinRequest | null>(() => {
     const code = codeFromUrl();
     return code ? { kind: 'code', code } : null;
   });
 
+  // Once the account loads, its name is the source of truth.
+  const profileId = profile?.id;
+  useEffect(() => {
+    if (profile) setName(profile.name);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileId]);
+
   if (!join) {
     return (
       <Menu
         name={name}
         onName={setName}
-        onJoin={(j) => {
-          saveName(name.trim());
+        onJoin={async (j) => {
+          const clean = name.trim();
+          saveName(clean);
+          if (profile && clean && clean !== profile.name) {
+            try {
+              await rename(clean);
+            } catch {
+              // keep playing under the old name
+            }
+          }
           setJoin(j);
         }}
       />
@@ -71,7 +72,7 @@ export function OnlineApp() {
   return (
     <GameView
       join={join}
-      name={name.trim() || fallbackName}
+      name={useAccount.getState().profile?.name ?? (name.trim() || fallbackName)}
       onLeave={() => {
         // Drop ?room= so a reload lands on the menu, not back in the room.
         history.replaceState(null, '', `${location.pathname}#online`);
@@ -93,12 +94,13 @@ const input: CSSProperties = {
   fontSize: token('font.sizeMd'),
 };
 
-function Menu({ name, onName, onJoin }: { name: string; onName: (n: string) => void; onJoin: (j: JoinRequest) => void }) {
+function Menu({ name, onName, onJoin }: { name: string; onName: (n: string) => void; onJoin: (j: JoinRequest) => void | Promise<void> }) {
   const [code, setCode] = useState('');
   return (
     <div style={{ position: 'fixed', inset: 0, display: 'grid', placeItems: 'center', padding: 16, background: token('color.background'), overflowY: 'auto' }}>
       <Panel style={{ width: 'min(360px, 100%)', boxSizing: 'border-box', display: 'grid', gap: token('space.md') }}>
         <h1 style={{ ...title, margin: 0, textAlign: 'center' }}>Snake Arena</h1>
+        <ProfileCard />
         <label style={{ display: 'grid', gap: token('space.xs'), fontSize: token('font.sizeSm'), color: token('color.textMuted') }}>
           Your name
           <input style={input} value={name} maxLength={16} placeholder="Player" onChange={(e) => onName(e.target.value)} />
@@ -127,9 +129,13 @@ function Menu({ name, onName, onJoin }: { name: string; onName: (n: string) => v
             Join
           </Button>
         </form>
-        <Button variant="secondary" onClick={() => (location.hash = '')} style={{ fontSize: token('font.sizeSm') }}>
-          Offline sandbox
-        </Button>
+        <DailyReward />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: token('space.sm') }}>
+          <ShopButton />
+          <Button variant="secondary" onClick={() => (location.hash = '')}>
+            Sandbox
+          </Button>
+        </div>
       </Panel>
     </div>
   );
@@ -145,7 +151,13 @@ function GameView({ join, name, onLeave }: { join: JoinRequest; name: string; on
     const renderer = new Renderer();
     renderer.init(host.current!).then(() => {
       if (cancelled) return renderer.app.destroy(true);
-      g = new OnlineGame(renderer, (s) => useOnline.setState(s, true), { url: serverUrl(), name, join });
+      g = new OnlineGame(renderer, (s) => useOnline.setState(s, true), {
+        url: serverUrl(),
+        name,
+        join,
+        token: useAccount.getState().status === 'ready' ? sessionToken() : null,
+        onRewards: () => void refreshProfile(),
+      });
       setGame(g);
     });
     return () => {
@@ -239,6 +251,12 @@ function PhaseOverlay({ game, onLeave }: { game: OnlineGame | null; onLeave: () 
       return (
         <Center>
           <div style={title}>{s.winnerName ? `${s.winnerName} wins!` : 'Draw'}</div>
+          {s.rewards && (
+            <div style={{ margin: `${token('space.md')} 0`, fontFamily: token('font.display'), fontSize: token('font.sizeLg') }}>
+              +{s.rewards.xp} XP · +{s.rewards.coins} coins
+              {s.rewards.levelAfter > s.rewards.levelBefore && <div>Level up! Level {s.rewards.levelAfter}</div>}
+            </div>
+          )}
           <div style={muted}>
             {lobby?.private ? 'Back to the lobby' : 'Next match'} in {s.phaseSecondsLeft ?? 0}s
           </div>

@@ -10,7 +10,7 @@ pnpm 12 + Turborepo. Run from the repo root.
 
 ```bash
 pnpm install
-pnpm dev                 # client (http://localhost:5173) + game-server (ws://localhost:2567)
+pnpm dev                 # client (:5173) + game-server (ws :2567) + api (:3000)
 pnpm dev:client          # client only (offline sandbox, #ui gallery)
 pnpm test                # all Vitest suites via turbo
 pnpm typecheck           # tsc --noEmit in every package
@@ -71,7 +71,19 @@ The server is authoritative. Hot-path traffic is custom binary over Colyseus `se
 - `Predictor` (netcode): the local snake is predicted on a one-snake game-core world, one `step` per input sent. On each snapshot it rebases on the server's head, angle and mass plus the `RemoteWorld` path, then replays inputs with `seq > lastSeq`. The jump from old to new prediction becomes an offset that decays over `smoothingMs` (above `snapDistance` = 60 it snaps). Eating, collisions and death are not predicted: the server's snapshots and events decide. With zero simulated loss the prediction matches the server exactly; `prediction.test.ts` checks this at 1, 3 and 6 ticks of latency.
 - `AdaptiveDelay` (netcode): the interpolation delay is the 95th percentile of measured snapshot transit (`serverNow - snapshot.serverTime` at arrival) plus one snapshot interval, slewed slowly. Render time is server-time based, so a fixed delay shorter than the one-way latency means constant extrapolation.
 
+### Accounts and rewards: apps/api, packages/meta, packages/auth
+- `packages/meta` is pure shared data and rules: the skin catalog (`SKINS`; a skin is a colour palette until atlases exist), the level curve, `matchReward`, the daily streak rules, the `Profile`/`Grant`/`MatchReport` types and `sanitizeName`. The API, game-server and client all use it, so prices and formulas live in one place.
+- `packages/auth`: HS256 player tokens (`jose`), signed by the API and verified by both the API and the game-server with `AUTH_SECRET`. `INTERNAL_KEY` guards server-to-server calls. Both have dev defaults and throw in production if unset.
+- `apps/api` (Fastify): `buildApp` in `app.ts` holds the routes and `players.ts` the domain logic. The routes:
+  - `POST /auth/guest`, `GET`/`PATCH /me`, `POST /me/daily`, `GET /shop`, `POST /shop/buy`, `POST /me/equip`.
+  - Game-server only, behind `x-internal-key`: `GET /internal/players/:id` and `POST /internal/match-results`.
+- Only guest accounts exist. A future Google/Apple/Supabase sign-in should exchange the provider token for the same player token, so the game-server never sees providers.
+- Database: plain SQL through the small `Db` interface (`db.ts`), with append-only `MIGRATIONS`. It is real Postgres via `pg` when `DATABASE_URL` is set, otherwise embedded PGlite (Postgres in WASM) at `apps/api/.data/pglite` (gitignored); tests use in-memory PGlite. Select `date` columns `::text` (driver Date parsing is timezone-dependent). Money paths (`buy`, `claimDaily`, `recordMatch`) run in transactions with `SELECT … FOR UPDATE`.
+- Rewards are server-authoritative. At match end `ArenaRoom.reportResults` sends placements, kills and survival (from `Match.results()`) for account holders to the API through `ArenaRoom.meta` (a `MetaService`; tests swap in a fake). The API grants XP and coins at most once per `(matchId, playerId)`. The game-server forwards each grant as a `'rewards'` message. Players who left mid-match are still paid.
+- Game-server join: `onAuth` verifies `options.token` (a bad or missing token means an anonymous player, never a rejection). `onJoin` looks up the account's name and equipped skin. Skins travel in `RosterEntry.skin`; bots get random ones. If the API is down, everyone plays anonymously.
+
 ### apps/client: Pixi + React shell
+- `account.ts` holds the account state (Zustand `useAccount`): it creates a guest on first launch and keeps the token in localStorage (`snake.token`). The game stays playable when the API is unreachable (`status: 'offline'`). `AccountUi.tsx` has the profile card (level, XP bar, coins), the daily reward and the shop modal. `Renderer.setSkins(map)` paints snakes by skin palette.
 - `game/Sandbox.ts` (offline) runs a fixed-step accumulator on the Pixi ticker, calling `step()` with player and bot inputs, then `Renderer.render(prev, cur, alpha)` at display rate.
 - `game/OnlineGame.ts` (online): client ticks come from a 30 Hz accumulator against `performance.now()`, woken by a 5 ms `setInterval`, so they never drift. Each tick samples input, sends it and steps the `Predictor`. Rendering runs on the Pixi ticker: everyone else is interpolated at `serverNow - interpDelayMs`, and the own snake comes from the predictor (the same object goes in both render states, so the renderer's lerp is a no-op for it). All traffic goes through the two `NetworkSimulator`s. The Net panel controls them, plus prediction on/off, auto/manual interp delay and correction smoothing, and shows RTT, snapshots/s, kbps, interp delay and prediction error.
 - `game/PlayerInput.ts` is the shared mouse/keyboard → `Input` mapping.
@@ -80,6 +92,6 @@ The server is authoritative. Hot-path traffic is custom binary over Colyseus `se
 
 ## Constraints from PLAN.md
 - `game-core`, `netcode` and `protocol` must not depend on the transport (Colyseus is only in `apps/game-server` and `OnlineGame.ts`). If Colyseus fights the custom netcode, PLAN.md allows replacing it with a thin `ws` server.
-- Planned but not yet created: `apps/api`, `packages/game-modes`. A new game mode should be one file in `game-modes`.
+- Planned but not yet created: `packages/game-modes` (a new game mode should be one file there), Redis (leaderboards and sessions), real sign-in providers, missions and season pass.
 - Cosmetics only, no pay-to-win. Rewards are granted server-side; the client never claims them.
 - Original art only. Snake skins are data (atlas + config), not code.

@@ -2,10 +2,12 @@ import { applyTheme, themeMono } from '@snake/design-tokens';
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { initAccount } from './account';
 import { Gallery } from './Gallery';
 import { OnlineApp } from './OnlineApp';
 
 applyTheme(themeMono);
+void initAccount();
 
 /** `#ui` shows the ui-kit gallery, `#online` plays against the game-server; anything else is the offline sandbox. */
 function Root() {

@@ -1,7 +1,14 @@
 import type { Vec2 } from '@snake/game-core';
+import { getSkin } from '@snake/meta';
 import { Application, Container, Graphics } from 'pixi.js';
 
-// Phase 1 placeholder look: plain white circles. Real skins plug in via atlases later.
+/** A skin's palette as Pixi colours, banded along the body. */
+interface Paint {
+  colors: number[];
+  band: number;
+}
+
+// Phase 1 placeholder look: plain circles in each skin's palette. Atlases plug in later.
 const COLORS = {
   grid: 0x1c1c1c,
   edge: 0xffffff,
@@ -45,6 +52,16 @@ export class Renderer {
   private readonly snakes = new Graphics();
   private zoom = 1;
   private camera: Vec2 = { x: 0, y: 0 };
+  private paints = new Map<number, Paint>();
+
+  /** Skin per snake id. Snakes without one are white when focused, grey otherwise. */
+  setSkins(skins: ReadonlyMap<number, string>): void {
+    this.paints = new Map();
+    for (const [id, skinId] of skins) {
+      const skin = getSkin(skinId);
+      if (skin) this.paints.set(id, { colors: skin.palette.map((c) => parseInt(c.slice(1), 16)), band: skin.band });
+    }
+  }
 
   async init(host: HTMLElement): Promise<void> {
     await this.app.init({
@@ -91,7 +108,8 @@ export class Renderer {
     const ordered = [...cur.snakes].sort((a, b) => Number(a.id === focusId) - Number(b.id === focusId));
     for (const s of ordered) {
       if (!s.alive) continue;
-      this.drawSnake(g, prevById.get(s.id) ?? s, s, alpha, s.id === focusId ? COLORS.player : COLORS.bot);
+      const paint = this.paints.get(s.id) ?? { colors: [s.id === focusId ? COLORS.player : COLORS.bot], band: 1 };
+      this.drawSnake(g, prevById.get(s.id) ?? s, s, alpha, paint);
     }
   }
 
@@ -131,7 +149,9 @@ export class Renderer {
     g.fill({ color: COLORS.pellet, alpha: 0.85 });
   }
 
-  private drawSnake(g: Graphics, prev: RenderSnake, cur: RenderSnake, alpha: number, color: number): void {
+  private drawSnake(g: Graphics, prev: RenderSnake, cur: RenderSnake, alpha: number, paint: Paint): void {
+    const { colors, band } = paint;
+    const color = colors[0]!;
     const r = lerp(prev.radius, cur.radius, alpha);
     const segs = cur.segments;
     // Segment k sits at the same distance behind the head in both states, so lerp index-wise.
@@ -149,7 +169,9 @@ export class Renderer {
     }
     for (let k = segs.length - 1; k >= 0; k--) {
       const p = at(k);
-      g.circle(p.x, p.y, r).fill(color).stroke({ width: 1.5, color: COLORS.outline, alpha: 0.6 });
+      // Bands are counted from the head, so the pattern stays put on the body as it moves.
+      const c = colors[Math.floor(k / band) % colors.length]!;
+      g.circle(p.x, p.y, r).fill(c).stroke({ width: 1.5, color: COLORS.outline, alpha: 0.6 });
     }
 
     // Eyes look along the heading.

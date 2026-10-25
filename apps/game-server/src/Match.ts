@@ -35,7 +35,13 @@ interface InputQueue {
  */
 export class Match {
   state: GameState;
+  /** Unique per match; the API grants rewards at most once per (match id, player). */
+  readonly id = crypto.randomUUID();
   private startTime: number;
+  private readonly kills = new Map<number, number>();
+  /** Final placement per snake (1 = winner), set as snakes die. */
+  private readonly placements = new Map<number, number>();
+  private readonly deathTick = new Map<number, number>();
   private readonly inputs = new Map<number, InputQueue>();
 
   constructor(
@@ -106,10 +112,36 @@ export class Match {
       const prev = this.state;
       const inputs = botInputs(prev, this.cfg, this.nextInputs());
       this.state = step(prev, inputs, this.cfg);
+      this.recordStats();
       const events = this.diff(prev, this.state);
       if (events.added.length || events.removed.length || events.deaths.length) out.push(events);
     }
     return out;
+  }
+
+  private recordStats(): void {
+    const s = this.state;
+    const aliveAfter = s.snakes.filter((sn) => sn.alive).length;
+    for (const e of s.events) {
+      if (e.type !== 'death') continue;
+      // Snakes dying on the same tick share a placement.
+      this.placements.set(e.snakeId, aliveAfter + 1);
+      this.deathTick.set(e.snakeId, s.tick);
+      if (e.killerId !== null && e.killerId !== e.snakeId) this.kills.set(e.killerId, (this.kills.get(e.killerId) ?? 0) + 1);
+    }
+    if (s.finished && s.winnerId !== null) this.placements.set(s.winnerId, 1);
+  }
+
+  /** Per-snake results. Meaningful once the match is finished. */
+  results(): { snakeId: number; placement: number; kills: number; survivalMs: number }[] {
+    const s = this.state;
+    const alive = s.snakes.filter((sn) => sn.alive).length;
+    return s.snakes.map((sn) => ({
+      snakeId: sn.id,
+      placement: this.placements.get(sn.id) ?? Math.max(1, alive),
+      kills: this.kills.get(sn.id) ?? 0,
+      survivalMs: Math.round((this.deathTick.get(sn.id) ?? s.tick) * this.cfg.dt * 1000),
+    }));
   }
 
   private diff(prev: GameState, next: GameState): EventsMsg {

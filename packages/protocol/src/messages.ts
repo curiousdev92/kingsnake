@@ -203,6 +203,8 @@ export interface RosterEntry {
   id: number;
   name: string;
   isBot: boolean;
+  /** Equipped skin id (see @snake/meta SKINS). */
+  skin: string;
 }
 
 export interface LobbyPlayer {
@@ -235,6 +237,9 @@ export interface MatchMsg {
   /** The server's simulation config, so client-side body rebuilding matches. */
   config: SimConfig;
 }
+
+/** Server -> client JSON message at match end with the account's rewards (a @snake/meta Grant). */
+export const REWARDS_MESSAGE = 'rewards';
 
 /** Client -> server JSON messages for private-room hosts. */
 export const START_MESSAGE = 'start';

@@ -1,9 +1,11 @@
 import { Client, type Room } from '@colyseus/sdk';
 import { makeConfig } from '@snake/game-core';
+import type { Grant } from '@snake/meta';
 import { AdaptiveDelay, ClockSync, NetworkSimulator, Predictor, RemoteWorld, type NetConditions, type ViewSnake } from '@snake/netcode';
 import {
   MATCH_MESSAGE,
   Msg,
+  REWARDS_MESSAGE,
   SETTINGS_MESSAGE,
   START_MESSAGE,
   decodeEvents,
@@ -32,6 +34,10 @@ export interface OnlineOptions {
   url: string;
   name: string;
   join: JoinRequest;
+  /** Account session token; without one the player is anonymous (no skin, no rewards). */
+  token?: string | null;
+  /** Called with the account's rewards when a match ends. */
+  onRewards?: (grant: Grant) => void;
 }
 
 export interface OnlineStats {
@@ -47,6 +53,8 @@ export interface OnlineStats {
   /** How the local snake died, e.g. "ran into Bot 3". */
   deathReason: string | null;
   winnerName: string | null;
+  /** This account's rewards for the match that just ended. */
+  rewards: Grant | null;
   mass: number;
   alive: number;
   total: number;
@@ -93,6 +101,7 @@ export class OnlineGame {
   private lastFrameAt = performance.now();
   private placement = 0;
   private deathReason: string | null = null;
+  private rewards: Grant | null = null;
   private lastSample: { mass: number; alive: number; you: boolean; extrapolating: boolean } = { mass: 0, alive: 0, you: false, extrapolating: false };
   private connection: OnlineStats['connection'] = 'connecting';
   private error: string | null = null;
@@ -141,7 +150,7 @@ export class OnlineGame {
     try {
       const client = new Client(this.opts.url);
       const join = this.opts.join;
-      const options = { name: this.opts.name };
+      const options = { name: this.opts.name, token: this.opts.token ?? undefined };
       const room =
         join.kind === 'quick'
           ? await client.joinOrCreate('arena', options)
@@ -178,6 +187,12 @@ export class OnlineGame {
         }, false);
       });
       room.onMessage(MATCH_MESSAGE, (m: MatchMsg) => this.down.deliver(() => this.onMatch(m), true));
+      room.onMessage(REWARDS_MESSAGE, (g: Grant) =>
+        this.down.deliver(() => {
+          this.rewards = g;
+          this.opts.onRewards?.(g);
+        }, true),
+      );
       room.onLeave((code) => {
         this.connection = 'closed';
         this.error = `Disconnected (${code})`;
@@ -223,6 +238,8 @@ export class OnlineGame {
     if (m.phase === 'playing' && prev?.phase !== 'playing') {
       this.placement = 0;
       this.deathReason = null;
+      this.rewards = null;
+      this.renderer.setSkins(new Map(m.roster.map((r) => [r.id, r.skin])));
     }
     if (m.phase === 'waiting' || m.phase === 'countdown') this.world.buffer.clear();
   }
@@ -315,6 +332,7 @@ export class OnlineGame {
       youAlive: this.lastSample.you,
       placement: this.placement,
       deathReason: this.deathReason,
+      rewards: this.rewards,
       winnerName: m?.winnerId != null ? (m.roster.find((r) => r.id === m.winnerId)?.name ?? null) : null,
       mass: Math.round(this.lastSample.mass),
       alive: this.lastSample.alive,

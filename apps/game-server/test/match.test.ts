@@ -42,6 +42,13 @@ describe('Match', () => {
     expect(events.flatMap((e) => e.deaths)).toContainEqual({ snakeId: 1, killerId: 2, cause: 'body' });
     expect(events.flatMap((e) => e.added).length).toBeGreaterThan(0); // dropped body
     expect(m.finished).toBe(true);
+
+    const results = m.results();
+    expect(results.find((r) => r.snakeId === 2)).toMatchObject({ placement: 1, kills: 1 });
+    const loser = results.find((r) => r.snakeId === 1)!;
+    expect(loser).toMatchObject({ placement: 2, kills: 0 });
+    expect(loser.survivalMs).toBeGreaterThan(0);
+    expect(loser.survivalMs).toBeLessThan(dtMs * 15);
   });
 
   it('full pellet sync contains every pellet', () => {

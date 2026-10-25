@@ -1,9 +1,12 @@
 import { Room, type Client } from '@colyseus/core';
+import { verifyPlayerToken } from '@snake/auth';
 import { makeConfig, type SimConfig } from '@snake/game-core';
+import { DEFAULT_SKIN, SKINS, sanitizeName, type MatchReport } from '@snake/meta';
 import {
   MATCH_MESSAGE,
   MAX_SNAKES,
   Msg,
+  REWARDS_MESSAGE,
   SETTINGS_MESSAGE,
   START_MESSAGE,
   decodeInput,
@@ -17,6 +20,7 @@ import {
   type SettingsMsg,
 } from '@snake/protocol';
 import { Match } from './Match';
+import { HttpMetaService, type MetaService } from './meta';
 import { botNames, roomCode } from './names';
 
 export interface ArenaOptions {
@@ -26,10 +30,15 @@ export interface ArenaOptions {
 
 export interface JoinOptions {
   name?: string;
+  /** Player session token from the API; without one the player is anonymous (no rewards). */
+  token?: string;
 }
 
 interface Player {
   name: string;
+  /** API account, or null for anonymous players. */
+  accountId: string | null;
+  skin: string;
   /** Snake in the current match, or null when waiting/spectating. */
   snakeId: number | null;
   /** Next snapshot carries every body (just joined, reconnected or match started). */
@@ -57,10 +66,7 @@ const RECONNECT_SECONDS = 10;
 
 const now = () => performance.now();
 
-function sanitizeName(name: unknown): string {
-  const s = typeof name === 'string' ? name.replace(/[^\p{L}\p{N} _.-]/gu, '').trim().slice(0, 16) : '';
-  return s || 'Player';
-}
+const randomSkin = () => SKINS[Math.floor(Math.random() * SKINS.length)]!.id;
 
 /**
  * One arena. Public rooms are filled by matchmaking: the first player starts a lobby
@@ -71,6 +77,9 @@ function sanitizeName(name: unknown): string {
  * Runs an authoritative Match and streams custom binary snapshots; no Colyseus Schema.
  */
 export class ArenaRoom extends Room {
+  /** Accounts and rewards. Tests swap in a fake before rooms are created. */
+  static meta: MetaService = new HttpMetaService();
+
   override maxClients = ROOM_SIZE;
   // Inputs at 30 Hz plus pings; anything far above that is abuse.
   override maxMessagesPerSecond = 120;
@@ -85,6 +94,8 @@ export class ArenaRoom extends Room {
   private winnerId: number | null = null;
   private hostSession: string | null = null;
   private readonly players = new Map<string, Player>();
+  /** Accounts playing in the current match, by snake id (kept if they leave mid-match). */
+  private matchAccounts = new Map<number, string>();
 
   override onCreate(options: ArenaOptions = {}) {
     this.isPrivate = options.private === true;
@@ -124,8 +135,22 @@ export class ArenaRoom extends Room {
     this.setSimulationInterval(() => this.update(), 1000 / 60);
   }
 
-  override onJoin(client: Client, options: JoinOptions = {}) {
-    this.players.set(client.sessionId, { name: sanitizeName(options.name), snakeId: null, needsFull: true });
+  /** Never rejects: a missing or bad token just means an anonymous player. */
+  override async onAuth(_client: Client, options: JoinOptions = {}) {
+    return { accountId: await verifyPlayerToken(options.token) };
+  }
+
+  override async onJoin(client: Client, options: JoinOptions = {}) {
+    const accountId: string | null = (client.auth as { accountId?: string | null } | undefined)?.accountId ?? null;
+    const account = accountId ? await ArenaRoom.meta.lookupPlayer(accountId) : null;
+    this.players.set(client.sessionId, {
+      // The account's name wins over the typed one; skins only come from accounts.
+      name: account?.name ?? (sanitizeName(options.name) || 'Player'),
+      accountId: account ? accountId : null,
+      skin: account?.skin ?? DEFAULT_SKIN,
+      snakeId: null,
+      needsFull: true,
+    });
     this.hostSession ??= client.sessionId;
     this.syncNewcomer(client);
     this.broadcastMatch();
@@ -184,6 +209,7 @@ export class ArenaRoom extends Room {
         if (this.match!.finished) {
           this.winnerId = this.match!.state.winnerId;
           this.setPhase('ended', t + timing.resultsMs);
+          void this.reportResults(this.match!, this.matchAccounts);
         }
         break;
       case 'ended':
@@ -203,16 +229,43 @@ export class ArenaRoom extends Room {
     const names = botNames(this.botsForNextMatch());
     const specs = [...humans.map((p) => ({ name: p.name })), ...names.map((name) => ({ name, isBot: true }))];
     this.match = new Match(specs, this.cfg, t);
+    const skins = new Map<number, string>();
+    this.matchAccounts = new Map();
     humans.forEach((p, i) => {
-      p.snakeId = this.match!.state.snakes[i]!.id;
+      const id = this.match!.state.snakes[i]!.id;
+      p.snakeId = id;
       p.needsFull = true;
+      skins.set(id, p.skin);
+      if (p.accountId) this.matchAccounts.set(id, p.accountId);
     });
-    this.roster = this.match.state.snakes.map((s) => ({ id: s.id, name: s.name, isBot: s.isBot }));
+    this.roster = this.match.state.snakes.map((s) => ({ id: s.id, name: s.name, isBot: s.isBot, skin: skins.get(s.id) ?? randomSkin() }));
     this.winnerId = null;
     // Public rooms stop taking players mid-match, so matchmaking opens a fresh room.
     if (!this.isPrivate) void this.lock();
     this.broadcast(Msg.Events, encodeEvents(this.match.fullPellets()));
     this.setPhase('playing', null);
+  }
+
+  /**
+   * Sends the finished match to the API, which grants rewards, then tells each
+   * account holder still here what they got. Players who left are still paid.
+   */
+  private async reportResults(match: Match, accounts: Map<number, string>): Promise<void> {
+    if (accounts.size === 0) return;
+    const report: MatchReport = {
+      matchId: match.id,
+      totalPlayers: match.state.snakes.length,
+      results: match
+        .results()
+        .filter((r) => accounts.has(r.snakeId))
+        .map((r) => ({ playerId: accounts.get(r.snakeId)!, placement: r.placement, kills: r.kills, survivalMs: r.survivalMs })),
+    };
+    const grants = await ArenaRoom.meta.reportMatch(report);
+    for (const client of this.clients) {
+      const accountId = this.players.get(client.sessionId)?.accountId;
+      const grant = accountId ? grants[accountId] : undefined;
+      if (grant) client.send(REWARDS_MESSAGE, grant);
+    }
   }
 
   private stepMatch(t: number): void {

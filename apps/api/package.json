@@ -1,0 +1,28 @@
+{
+  "name": "@snake/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.0",
+    "@fastify/cors": "^11.0.0",
+    "@snake/auth": "workspace:*",
+    "@snake/meta": "workspace:*",
+    "fastify": "^5.0.0",
+    "pg": "^8.0.0"
+  },
+  "devDependencies": {
+    "@snake/config": "workspace:*",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}
