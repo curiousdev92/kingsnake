@@ -6,6 +6,7 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import type { Db } from './db';
 import { ApiError, buy, claimDaily, createGuest, equip, getProfile, publicPlayer, recordMatch, rename } from './players';
 import { claimSeasonReward, leaderboard } from './seasons';
+import { allowRequest } from './redis';
 
 export interface AppOptions {
   db: Db;
@@ -54,11 +55,16 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
 
   const body = (req: FastifyRequest) => (req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {});
 
+  app.get('/', async () => ({ name: 'snake-arena-api', ok: true, health: '/health' }));
   app.get('/health', async () => ({ ok: true }));
 
   // ---- accounts ----
 
-  app.post('/auth/guest', async (req) => {
+  app.post('/auth/guest', async (req, reply) => {
+    const address = req.ip;
+    if (!(await allowRequest(`guest:${address}`))) {
+      return reply.status(429).send({ error: 'rate_limited', message: 'Too many guest accounts requested' });
+    }
     const id = await createGuest(db, body(req).name);
     return { token: await signPlayerToken(id, authSecret), profile: await getProfile(db, id, now()) };
   });
