@@ -1,0 +1,7 @@
+{
+  "buildCommand": "pnpm --filter @snake/client build",
+  "outputDirectory": "apps/client/dist",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "framework": "vite",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}
