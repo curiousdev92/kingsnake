@@ -45,9 +45,9 @@ const normalizeCode = (c: string) =>
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "")
     .slice(0, CODE_LENGTH);
-const serverUrl = () => {
+const serverUrl = (): string | null => {
   const override = new URLSearchParams(location.search).get("server");
-  if (override) return override;
+  if (override?.trim()) return override.trim();
 
   const configured = import.meta.env.VITE_GAME_SERVER_URL?.trim();
   if (configured) return configured;
@@ -58,9 +58,10 @@ const serverUrl = () => {
     return `ws://${location.hostname}:2567`;
   }
 
-  throw new Error(
-    "Online play is not configured. Set VITE_GAME_SERVER_URL to the public game-server WebSocket URL.",
-  );
+  // A production frontend can still render normally when its game server has
+  // not been deployed yet. The game view displays setup guidance instead of
+  // throwing during the effect and polluting the preview with runtime errors.
+  return null;
 };
 
 function codeFromUrl(): string | null {
@@ -290,15 +291,22 @@ function GameView({
 }) {
   const host = useRef<HTMLDivElement>(null);
   const [game, setGame] = useState<OnlineGame | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
 
   useEffect(() => {
+    const url = serverUrl();
+    if (!url) {
+      setUnavailable(true);
+      return;
+    }
+
     let cancelled = false;
     let g: OnlineGame | null = null;
     const renderer = new Renderer();
     renderer.init(host.current!).then(() => {
       if (cancelled) return renderer.app.destroy(true);
       g = new OnlineGame(renderer, (s) => useOnline.setState(s, true), {
-        url: serverUrl(),
+        url, 
         name,
         join,
         token: useAccount.getState().status === "ready" ? sessionToken() : null,
@@ -315,6 +323,30 @@ function GameView({
       }
     };
   }, [join, name]);
+
+  if (unavailable) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          padding: token("space.lg"),
+        }}
+      >
+        <Panel style={{ maxWidth: 520, display: "grid", gap: token("space.md") }}>
+          <strong>Online play is unavailable</strong>
+          <p style={{ margin: 0, color: token("color.textMuted") }}>
+            The web client is running, but its game server has not been configured
+            for this deployment yet.
+          </p>
+          <Button variant="secondary" onClick={onLeave}>
+            Back to menu
+          </Button>
+        </Panel>
+      </div>
+    );
+  }
 
   return (
     <div style={{ position: "fixed", inset: 0 }}>
