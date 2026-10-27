@@ -45,9 +45,23 @@ const normalizeCode = (c: string) =>
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "")
     .slice(0, CODE_LENGTH);
-const serverUrl = () =>
-  new URLSearchParams(location.search).get("server") ??
-  `ws://${location.hostname}:2567`;
+const serverUrl = () => {
+  const override = new URLSearchParams(location.search).get("server");
+  if (override) return override;
+
+  const configured = import.meta.env.VITE_GAME_SERVER_URL?.trim();
+  if (configured) return configured;
+
+  // The local dev server is available on port 2567; Vercel cannot expose a
+  // second long-lived WebSocket process behind the frontend hostname.
+  if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+    return `ws://${location.hostname}:2567`;
+  }
+
+  throw new Error(
+    "Online play is not configured. Set VITE_GAME_SERVER_URL to the public game-server WebSocket URL.",
+  );
+};
 
 function codeFromUrl(): string | null {
   const c = new URLSearchParams(location.search).get("room");
