@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Snake Arena: a realtime multiplayer, Slither-style snake game (last snake alive wins) for web, Android and iOS, all in TypeScript. `PLAN.md` is the source of truth for design decisions and build order; `ART_SPEC.md` defines asset naming and 9-slice conventions. Read the relevant PLAN.md section before starting a new piece of work.
+KingSnake: a realtime multiplayer, Slither-style snake game (last snake alive wins) for web, Android and iOS, all in TypeScript. `PLAN.md` is the source of truth for design decisions and build order; `ART_SPEC.md` defines asset naming and 9-slice conventions. Read the relevant PLAN.md section before starting a new piece of work.
 
 ## Commands
 

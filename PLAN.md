@@ -1,4 +1,4 @@
-# Snake Arena: Project Plan (Slither-style)
+# KingSnake: Project Plan (Slither-style)
 
 Realtime multiplayer snake game for web, Android and iOS. Snakes move continuously (free angles, smooth turning, boost) like Slither.io. Last snake alive in the room wins.
 Priorities: clean, maintainable, buttery smooth, beautiful and rewarding.

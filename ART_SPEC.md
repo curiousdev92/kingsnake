@@ -1,4 +1,4 @@
-# Snake Arena: Art Spec for UI and Game Assets
+# KingSnake: Art Spec for UI and Game Assets
 
 Hand this to your artist. All names match `packages/assets/assets.manifest.ts`, so delivered files can be plugged in without code changes.
 
