@@ -99,6 +99,7 @@ The server is authoritative. Hot-path traffic is custom binary over Colyseus `se
 
 ## Constraints from PLAN.md
 - `game-core`, `netcode` and `protocol` must not depend on the transport (Colyseus is only in `apps/game-server` and `OnlineGame.ts`). If Colyseus fights the custom netcode, PLAN.md allows replacing it with a thin `ws` server.
-- Planned but not yet created: Redis (sessions; leaderboards run on Postgres until they need it), real sign-in providers, missions and season pass. WebTransport is out of scope.
+- Redis (Upstash) is optional and only rate-limits `POST /auth/guest` (`apps/api/src/redis.ts`); without `KV_REST_API_URL` and `KV_REST_API_TOKEN`, requests are allowed.
+- Planned but not yet created: Redis sessions (leaderboards run on Postgres until they need Redis), real sign-in providers, missions and season pass. WebTransport is out of scope.
 - Cosmetics only, no pay-to-win. Rewards are granted server-side; the client never claims them.
 - Original art only. Snake skins are data (atlas + config), not code.
