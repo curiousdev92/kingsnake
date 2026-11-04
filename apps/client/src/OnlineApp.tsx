@@ -1,30 +1,11 @@
 import type { LobbyInfo } from "@snake/protocol";
-import { DEFAULT_MODE, MODES, getMode } from "@snake/game-modes";
+import { getMode } from "@snake/game-modes";
 import { token } from "@snake/design-tokens";
-import { Button, Panel, Tabs } from "@snake/ui-kit";
-import {
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
+import { Button, Panel } from "@snake/ui-kit";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { create } from "zustand";
-import {
-  DailyReward,
-  ProfileCard,
-  ShopButton,
-  inputStyle as input,
-} from "./AccountUi";
-import {
-  refreshProfile,
-  rename,
-  savedName,
-  saveName,
-  sessionToken,
-  useAccount,
-} from "./account";
-import { LeaderboardButton, SeasonReward } from "./RankedUi";
+import { refreshProfile, savedName, sessionToken, useAccount } from "./account";
+import { Home, normalizeCode } from "./Home";
 import {
   OnlineGame,
   type JoinRequest,
@@ -34,22 +15,6 @@ import { Renderer } from "./game/Renderer";
 
 const useOnline = create<OnlineStats | null>(() => null);
 
-const CODE_LENGTH = 5;
-const MODE_KEY = "snake.mode";
-
-function savedMode(): string {
-  try {
-    return getMode(localStorage.getItem(MODE_KEY)).id;
-  } catch {
-    return DEFAULT_MODE.id;
-  }
-}
-
-const normalizeCode = (c: string) =>
-  c
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "")
-    .slice(0, CODE_LENGTH);
 const serverUrl = (): string | null => {
   const override = new URLSearchParams(location.search).get("server");
   if (override?.trim()) return override.trim();
@@ -78,18 +43,16 @@ function codeFromUrl(): string | null {
 function inviteLink(code: string): string {
   const u = new URL(location.href);
   u.search = "";
+  u.hash = "";
   u.searchParams.set("room", code);
-  u.hash = "online";
   return u.toString();
 }
 
 /**
- * Online play: a menu (quick play, create or join a private room), then the room.
- * Open with `#online`; `?room=CODE#online` joins a private room directly; `?server=` overrides the URL.
+ * The home screen, then the room once the player presses Play.
+ * `?room=CODE` (an invite link) joins a private room directly; `?server=` overrides the URL.
  */
 export function OnlineApp() {
-  const profile = useAccount((s) => s.profile);
-  const [name, setName] = useState(savedName);
   const [fallbackName] = useState(
     () => `Player${Math.floor(Math.random() * 900 + 100)}`,
   );
@@ -98,177 +61,17 @@ export function OnlineApp() {
     return code ? { kind: "code", code } : null;
   });
 
-  // Once the account loads (or is renamed in the profile, or switched), its name is the source of truth.
-  const profileName = profile?.name;
-  useEffect(() => {
-    if (profileName !== undefined) setName(profileName);
-  }, [profileName]);
-
-  if (!join) {
-    return (
-      <Menu
-        name={name}
-        onName={setName}
-        onJoin={async (j) => {
-          const clean = name.trim();
-          saveName(clean);
-          if (profile && clean && clean !== profile.name) {
-            try {
-              await rename(clean);
-            } catch {
-              // keep playing under the old name
-            }
-          }
-          setJoin(j);
-        }}
-      />
-    );
-  }
+  if (!join) return <Home onJoin={setJoin} />;
   return (
     <GameView
       join={join}
-      name={
-        useAccount.getState().profile?.name ?? (name.trim() || fallbackName)
-      }
+      name={useAccount.getState().profile?.name ?? (savedName() || fallbackName)}
       onLeave={() => {
-        // Drop ?room= so a reload lands on the menu, not back in the room.
-        history.replaceState(null, "", `${location.pathname}#online`);
+        // Drop ?room= so a reload lands on the home screen, not back in the room.
+        history.replaceState(null, "", location.pathname);
         setJoin(null);
       }}
     />
-  );
-}
-
-function Menu({
-  name,
-  onName,
-  onJoin,
-}: {
-  name: string;
-  onName: (n: string) => void;
-  onJoin: (j: JoinRequest) => void | Promise<void>;
-}) {
-  const [code, setCode] = useState("");
-  const [modeId, setModeId] = useState(savedMode);
-  const mode = getMode(modeId);
-  const pickMode = (id: string) => {
-    setModeId(id);
-    try {
-      localStorage.setItem(MODE_KEY, id);
-    } catch {
-      // remembered for this visit only
-    }
-  };
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        display: "grid",
-        placeItems: "center",
-        padding: 16,
-        background: token("color.background"),
-        overflowY: "auto",
-      }}
-    >
-      <Panel
-        style={{
-          width: "min(360px, 100%)",
-          boxSizing: "border-box",
-          display: "grid",
-          gap: token("space.md"),
-        }}
-      >
-        <h1 style={{ ...title, margin: 0, textAlign: "center" }}>KingSnake</h1>
-        <ProfileCard />
-        <label
-          style={{
-            display: "grid",
-            gap: token("space.xs"),
-            fontSize: token("font.sizeSm"),
-            color: token("color.textMuted"),
-          }}
-        >
-          Your name
-          <input
-            style={input}
-            value={name}
-            maxLength={16}
-            placeholder="Player"
-            onChange={(e) => onName(e.target.value)}
-          />
-        </label>
-        <div style={{ display: "grid", gap: token("space.xs") }}>
-          <Tabs
-            items={MODES.map((m) => ({ value: m.id, label: m.name }))}
-            value={mode.id}
-            onChange={pickMode}
-          />
-          <div
-            style={{
-              fontSize: token("font.sizeSm"),
-              color: token("color.textMuted"),
-              textAlign: "center",
-            }}
-          >
-            {mode.description}
-          </div>
-        </div>
-        <Button
-          onClick={() => onJoin({ kind: "quick", mode: mode.id })}
-          style={{ fontSize: token("font.sizeLg") }}
-        >
-          Quick play
-        </Button>
-        <Button
-          variant="secondary"
-          onClick={() => onJoin({ kind: "create", mode: mode.id })}
-        >
-          Create private room
-        </Button>
-        <form
-          style={{ display: "flex", gap: token("space.sm") }}
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (code.length === CODE_LENGTH) onJoin({ kind: "code", code });
-          }}
-        >
-          <input
-            style={{
-              ...input,
-              textTransform: "uppercase",
-              letterSpacing: "0.15em",
-            }}
-            value={code}
-            placeholder="Room code"
-            aria-label="Room code"
-            onChange={(e) => setCode(normalizeCode(e.target.value))}
-          />
-          <Button
-            variant="secondary"
-            type="submit"
-            disabled={code.length !== CODE_LENGTH}
-          >
-            Join
-          </Button>
-        </form>
-        <DailyReward />
-        <SeasonReward />
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr 1fr",
-            gap: token("space.sm"),
-          }}
-        >
-          <ShopButton />
-          <LeaderboardButton />
-          <Button variant="secondary" onClick={() => (location.hash = "")}>
-            Sandbox
-          </Button>
-        </div>
-      </Panel>
-    </div>
   );
 }
 
@@ -684,7 +487,10 @@ const KNOBS = [
 ] as const;
 type KnobKey = (typeof KNOBS)[number]["key"];
 
-/** Network simulator, prediction and interpolation controls with live diagnostics. */
+/** Network tuning is for development only: release builds never show it to players. */
+const DEV_TOOLS = import.meta.env.DEV;
+
+/** The Leave button, plus (dev builds only) network simulator, prediction and interpolation controls. */
 function NetPanel({
   game,
   onLeave,
@@ -746,15 +552,17 @@ function NetPanel({
         >
           Leave
         </Button>
-        <Button
-          variant="secondary"
-          onClick={() => setOpen(!open)}
-          style={{ fontSize: token("font.sizeSm") }}
-        >
-          {open ? "Hide net" : "Net"}
-        </Button>
+        {DEV_TOOLS && (
+          <Button
+            variant="secondary"
+            onClick={() => setOpen(!open)}
+            style={{ fontSize: token("font.sizeSm") }}
+          >
+            {open ? "Hide net" : "Net"}
+          </Button>
+        )}
       </div>
-      {open && (
+      {DEV_TOOLS && open && (
         <Panel
           style={{
             width: 250,

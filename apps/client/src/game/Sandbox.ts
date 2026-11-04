@@ -31,7 +31,7 @@ export interface SandboxStats {
  * rendered at display rate with interpolation between the last two sim states.
  */
 export class Sandbox {
-  readonly cfg: SimConfig = makeConfig();
+  private readonly cfg: Readonly<SimConfig> = makeConfig();
   private prev!: GameState;
   private state!: GameState;
   private acc = 0;
@@ -43,7 +43,7 @@ export class Sandbox {
   constructor(
     private readonly renderer: Renderer,
     private readonly onStats: (s: SandboxStats) => void,
-    public botCount = 7,
+    private readonly botCount: number,
   ) {
     this.player = new PlayerInput(renderer.canvas);
     this.restart();

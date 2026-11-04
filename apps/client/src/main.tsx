@@ -1,25 +1,23 @@
 import { applyTheme, themeMono } from '@snake/design-tokens';
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { initAccount } from './account';
 import { Gallery } from './Gallery';
 import { OnlineApp } from './OnlineApp';
+import { useRoute } from './routes';
+import { SettingsPage } from './Settings';
 
 applyTheme(themeMono);
 void initAccount();
 
-/** `#ui` shows the ui-kit gallery, `#online` plays against the game-server; anything else is the offline sandbox. */
+/** Home (and online play) by default; `#practice` is offline play, `#settings` the settings page. */
 function Root() {
-  const [hash, setHash] = useState(location.hash);
-  useEffect(() => {
-    const onHash = () => setHash(location.hash);
-    window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
-  }, []);
-  if (hash === '#ui') return <Gallery />;
-  if (hash === '#online') return <OnlineApp />;
-  return <App />;
+  const route = useRoute();
+  if (route === 'gallery') return <Gallery />;
+  if (route === 'practice') return <App />;
+  if (route === 'settings') return <SettingsPage />;
+  return <OnlineApp />;
 }
 
 createRoot(document.getElementById('root')!).render(

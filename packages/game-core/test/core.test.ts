@@ -4,6 +4,7 @@ import {
   botInputs,
   createGame,
   createSnake,
+  defaultConfig,
   makeConfig,
   sampleSegments,
   step,
@@ -13,6 +14,25 @@ import {
   type Input,
   type SimConfig,
 } from '../src';
+
+describe('fixed tuning', () => {
+  it('has the agreed values and cannot be changed', () => {
+    expect(defaultConfig).toMatchObject({
+      baseSpeed: 200,
+      baseTurnRate: 12,
+      turnRateMassFalloff: 120,
+      boostMultiplier: 2,
+      boostCostPerSecond: 2,
+      segmentSpacing: 9,
+      lengthPerMass: 5,
+    });
+    expect(Object.isFrozen(defaultConfig)).toBe(true);
+    expect(Object.isFrozen(defaultConfig.shrinkSchedule[0])).toBe(true);
+    expect(() => {
+      (defaultConfig as SimConfig).baseSpeed = 999;
+    }).toThrow();
+  });
+});
 
 // No pellet respawns and no shrinking unless a test asks for them.
 const quiet = (o: Partial<SimConfig> = {}) =>
@@ -121,8 +141,11 @@ describe('boost', () => {
   });
 
   it('stops at the minimum boost mass', () => {
-    const cfg = quiet();
-    const s = run(soloGame(cfg), 300, cfg, new Map([[1, { targetAngle: 0, boost: true }]]));
+    // A big arena, so the snake burns down to the minimum before it reaches the edge.
+    const cfg = quiet({ arenaBaseRadius: 10_000 });
+    const seconds = (cfg.startMass - cfg.minBoostMass) / cfg.boostCostPerSecond + 1;
+    const s = run(soloGame(cfg), Math.ceil(seconds / cfg.dt), cfg, new Map([[1, { targetAngle: 0, boost: true }]]));
+    expect(s.snakes[0]!.alive).toBe(true);
     expect(s.snakes[0]!.mass).toBeCloseTo(cfg.minBoostMass, 5);
   });
 });

@@ -52,7 +52,7 @@ function daysLeft(endsAt: string): number {
   return Math.max(0, Math.ceil((Date.parse(endsAt) - Date.now()) / 86_400_000));
 }
 
-function LeaderboardModal({ onClose }: { onClose: () => void }) {
+export function LeaderboardModal({ onClose }: { onClose: () => void }) {
   const current = seasonAt(new Date());
   const last = previousSeason(current);
   const [seasonId, setSeasonId] = useState(current.id);

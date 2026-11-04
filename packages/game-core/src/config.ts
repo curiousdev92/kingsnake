@@ -43,14 +43,21 @@ export interface SimConfig {
   headToHead: 'both-die' | 'bigger-wins';
 }
 
-export const defaultConfig: SimConfig = {
+/**
+ * The game's fixed tuning, the same for every player and match. It is frozen: the
+ * server sends it to clients for prediction, and nothing in a client may change it.
+ * Modes only adjust the arena and head-to-head rule (see @snake/game-modes).
+ */
+export const defaultConfig: Readonly<SimConfig> = deepFreeze({
   dt: 1 / 30,
-  baseSpeed: 170,
+  baseSpeed: 200,
   boostMultiplier: 2,
-  boostCostPerSecond: 6,
+  boostCostPerSecond: 2,
   minBoostMass: 12,
-  baseTurnRate: 5,
-  turnRateMassFalloff: 250,
+  baseTurnRate: 12,
+  // Starting snakes (mass 20) turn at ~10 rad/s, mass 200 at ~4.5, mass 1000 at ~1.3,
+  // so big snakes trade agility for reach.
+  turnRateMassFalloff: 120,
   startMass: 20,
   segmentSpacing: 9,
   baseLength: 60,
@@ -64,7 +71,8 @@ export const defaultConfig: SimConfig = {
   maxPelletSpawnsPerTick: 6,
   deathDropRatio: 0.8,
   arenaBaseRadius: 900,
-  arenaPerPlayer: 140,
+  // 20-snake rooms: 900 + 20 × 90 = 2700 units, keeping pellet counts manageable.
+  arenaPerPlayer: 90,
   shrinkSchedule: [
     { atSecond: 30, radiusFactor: 0.75 },
     { atSecond: 75, radiusFactor: 0.5 },
@@ -73,8 +81,14 @@ export const defaultConfig: SimConfig = {
   ],
   shrinkSpeed: 12,
   headToHead: 'both-die',
-};
+});
 
+function deepFreeze<T extends object>(value: T): T {
+  for (const v of Object.values(value)) if (v && typeof v === 'object') deepFreeze(v);
+  return Object.freeze(value);
+}
+
+/** A config for modes and tests: the fixed tuning plus overrides. */
 export function makeConfig(overrides: Partial<SimConfig> = {}): SimConfig {
   return { ...defaultConfig, ...overrides };
 }

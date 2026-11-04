@@ -18,7 +18,8 @@ export interface AppOptions {
   logger?: boolean;
 }
 
-const MAX_RESULTS_PER_MATCH = 16;
+// Above the biggest room (20 snakes), so no full match is ever refused.
+const MAX_RESULTS_PER_MATCH = 32;
 
 /**
  * The meta API: guest accounts, profiles, daily rewards, the cosmetics shop, and

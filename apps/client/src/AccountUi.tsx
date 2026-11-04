@@ -147,7 +147,7 @@ export function ShopButton() {
   );
 }
 
-function Shop({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function Shop({ open, onClose }: { open: boolean; onClose: () => void }) {
   const profile = useAccount((s) => s.profile);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -208,7 +208,7 @@ function formatDuration(ms: number): string {
 }
 
 /** The full profile: avatar, name, stats, ranked standing, and signing up, in or out. */
-function ProfileModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function ProfileModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const profile = useAccount((s) => s.profile);
   if (!profile) return null;
   return (
