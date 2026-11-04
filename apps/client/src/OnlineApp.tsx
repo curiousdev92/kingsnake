@@ -10,7 +10,12 @@ import {
   type ReactNode,
 } from "react";
 import { create } from "zustand";
-import { DailyReward, ProfileCard, ShopButton } from "./AccountUi";
+import {
+  DailyReward,
+  ProfileCard,
+  ShopButton,
+  inputStyle as input,
+} from "./AccountUi";
 import {
   refreshProfile,
   rename,
@@ -93,12 +98,11 @@ export function OnlineApp() {
     return code ? { kind: "code", code } : null;
   });
 
-  // Once the account loads, its name is the source of truth.
-  const profileId = profile?.id;
+  // Once the account loads (or is renamed in the profile, or switched), its name is the source of truth.
+  const profileName = profile?.name;
   useEffect(() => {
-    if (profile) setName(profile.name);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profileId]);
+    if (profileName !== undefined) setName(profileName);
+  }, [profileName]);
 
   if (!join) {
     return (
@@ -134,18 +138,6 @@ export function OnlineApp() {
     />
   );
 }
-
-const input: CSSProperties = {
-  boxSizing: "border-box",
-  width: "100%",
-  padding: `${token("space.sm")} ${token("space.md")}`,
-  background: token("color.background"),
-  color: token("color.text"),
-  border: `${token("border.width")} solid ${token("color.textMuted")}`,
-  borderRadius: token("radius.button"),
-  fontFamily: token("font.body"),
-  fontSize: token("font.sizeMd"),
-};
 
 function Menu({
   name,
@@ -541,8 +533,7 @@ function PhaseOverlay({
       if (!s.youAlive && s.placement > 0) {
         return (
           <Banner>
-            You {s.deathReason ?? "died"} (#{s.placement} of {s.total}).
-            Spectating
+            You {s.deathReason ?? "died"} (#{s.placement} of {s.total})
           </Banner>
         );
       }

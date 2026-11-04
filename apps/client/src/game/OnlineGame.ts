@@ -328,8 +328,8 @@ export class OnlineGame {
     const a = { ...s.a, snakes: snakesA, pellets: s.pellets };
     const b = { ...s.b, snakes: snakesB, pellets: s.pellets };
     const me = snakesB.find((sn) => sn.id === you);
-    // Spectate the biggest snake once our own is gone.
-    const focus = me ? you : ([...s.b.snakes].sort((x, y) => y.mass - x.mass)[0]?.id ?? null);
+    // After death the camera holds where we died; only late joiners (no snake) follow the biggest one.
+    const focus = you ?? ([...s.b.snakes].sort((x, y) => y.mass - x.mass)[0]?.id ?? null);
     this.renderer.render(a, b, s.t, focus);
     this.lastSample = { mass: me?.mass ?? 0, alive: s.b.snakes.length, you: !!me, extrapolating: s.extrapolating };
   }

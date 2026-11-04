@@ -59,6 +59,72 @@ describe('accounts', () => {
   });
 });
 
+describe('email login', () => {
+  const post = (url: string, payload: object, token?: string) =>
+    app.inject({ method: 'POST', url, payload, ...(token && { headers: authed(token) }) });
+
+  it('registers a guest in place, keeping progress, then logs in', async () => {
+    const { token, profile } = await guest('Reggie');
+    expect(profile).toMatchObject({ email: null, avatar: 'snake' });
+    await app.inject({ method: 'POST', url: '/me/daily', headers: authed(token) });
+
+    const reg = await post('/auth/register', { email: ' Reggie@Example.com ', password: 'hunter2hunter2' }, token);
+    expect(reg.statusCode).toBe(200);
+    expect(reg.json().profile).toMatchObject({ id: profile.id, email: 'reggie@example.com', coins: STARTING_COINS + dailyReward(1) });
+
+    const ok = await post('/auth/login', { email: 'REGGIE@example.com', password: 'hunter2hunter2' });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().profile.id).toBe(profile.id);
+    expect((await app.inject({ url: '/me', headers: authed(ok.json().token) })).json().name).toBe('Reggie');
+  });
+
+  it('rejects wrong passwords, unknown emails, duplicates and weak input', async () => {
+    await post('/auth/register', { email: 'dup@example.com', password: 'longenough' });
+    const wrong = await post('/auth/login', { email: 'dup@example.com', password: 'wrongpassword' });
+    const unknown = await post('/auth/login', { email: 'nobody@example.com', password: 'wrongpassword' });
+    expect(wrong.statusCode).toBe(401);
+    expect(unknown.statusCode).toBe(401);
+    expect(unknown.json().error).toBe(wrong.json().error);
+    expect((await post('/auth/register', { email: 'DUP@example.com', password: 'longenough' })).statusCode).toBe(409);
+    expect((await post('/auth/register', { email: 'not-an-email', password: 'longenough' })).statusCode).toBe(400);
+    expect((await post('/auth/register', { email: 'short@example.com', password: 'short' })).statusCode).toBe(400);
+  });
+
+  it('creates a separate account when the signed-in one is already registered', async () => {
+    const first = (await post('/auth/register', { email: 'one@example.com', password: 'longenough' })).json();
+    const second = (await post('/auth/register', { email: 'two@example.com', password: 'longenough' }, first.token)).json();
+    expect(second.profile.id).not.toBe(first.profile.id);
+    expect((await app.inject({ url: '/me', headers: authed(first.token) })).json().email).toBe('one@example.com');
+  });
+});
+
+describe('profile', () => {
+  it('changes the avatar, rejecting unknown ones', async () => {
+    const { token } = await guest('Ava');
+    const ok = await app.inject({ method: 'PATCH', url: '/me', headers: authed(token), payload: { avatar: 'crown' } });
+    expect(ok.json()).toMatchObject({ avatar: 'crown', name: 'Ava' });
+    const bad = await app.inject({ method: 'PATCH', url: '/me', headers: authed(token), payload: { avatar: 'nope' } });
+    expect(bad.statusCode).toBe(400);
+  });
+
+  it('totals match stats', async () => {
+    const { token, profile } = await guest('Stats');
+    expect(profile.stats).toEqual({ matches: 0, wins: 0, kills: 0, bestPlacement: null, survivalMs: 0 });
+    const report = (matchId: string, placement: number, kills: number) =>
+      app.inject({
+        method: 'POST',
+        url: '/internal/match-results',
+        headers: { 'x-internal-key': INTERNAL },
+        payload: { matchId, totalPlayers: 8, results: [{ playerId: profile.id, placement, kills, survivalMs: 30_000 }] },
+      });
+    await report('stats-1', 3, 2);
+    await report('stats-2', 1, 4);
+    await report('stats-2', 1, 4); // retried report counts once
+    const me = (await app.inject({ url: '/me', headers: authed(token) })).json() as Profile;
+    expect(me.stats).toEqual({ matches: 2, wins: 1, kills: 6, bestPlacement: 1, survivalMs: 60_000 });
+  });
+});
+
 describe('daily reward', () => {
   it('pays once a day and builds a streak', async () => {
     const { token } = await guest();

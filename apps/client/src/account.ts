@@ -3,8 +3,10 @@ import { create } from 'zustand';
 
 /**
  * The player's account: a guest session against the meta API, created on first
- * launch and kept as a token in localStorage. The API is optional for playing: if it
- * is unreachable the game still works, just without profile, shop or rewards.
+ * launch and kept as a token in localStorage. A guest can register an email and
+ * password to keep its progress, or log in to another account. The API is optional
+ * for playing: if it is unreachable the game still works, just without profile, shop
+ * or rewards.
  */
 export interface AccountState {
   status: 'loading' | 'ready' | 'offline';
@@ -98,6 +100,36 @@ export async function refreshProfile(): Promise<void> {
   } catch {
     // keep what we have
   }
+}
+
+type Session = { token: string; profile: Profile };
+
+function startSession({ token, profile }: Session): void {
+  storageSet(TOKEN_KEY, token);
+  saveName(profile.name);
+  setProfile(profile);
+}
+
+/** Adds email and password to the current guest, so its progress is kept and can be logged into anywhere. */
+export async function register(email: string, password: string): Promise<void> {
+  startSession(await call<Session>('POST', '/auth/register', { email, password, name: savedName() }));
+}
+
+/** Switches to an existing account. The current guest's progress stays with that guest. */
+export async function login(email: string, password: string): Promise<void> {
+  startSession(await call<Session>('POST', '/auth/login', { email, password }));
+}
+
+/** Forgets the session and continues as a fresh guest. */
+export async function signOut(): Promise<void> {
+  storageSet(TOKEN_KEY, null);
+  saveName('');
+  useAccount.setState({ status: 'loading', profile: null });
+  await initAccount();
+}
+
+export async function setAvatar(avatar: string): Promise<void> {
+  setProfile(await call<Profile>('PATCH', '/me', { avatar }));
 }
 
 export async function rename(name: string): Promise<void> {

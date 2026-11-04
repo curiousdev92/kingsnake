@@ -59,7 +59,7 @@ function GameOver({ sandbox }: { sandbox: Sandbox }) {
       <Panel style={{ textAlign: 'center', pointerEvents: 'auto', minWidth: 220 }}>
         <div style={{ fontFamily: token('font.display'), fontSize: token('font.sizeXl') }}>{title}</div>
         <div style={{ color: token('color.textMuted'), margin: `${token('space.sm')} 0 ${token('space.lg')}` }}>
-          {status === 'dead' ? `#${placement} of ${total}, spectating` : `Placed #${placement} of ${total}`}
+          {status === 'dead' ? `#${placement} of ${total}` : `Placed #${placement} of ${total}`}
         </div>
         <Button onClick={() => sandbox.restart()}>Play again</Button>
       </Panel>

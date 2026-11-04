@@ -11,6 +11,11 @@ export function sanitizeName(name: unknown): string {
 export interface Profile {
   id: string;
   name: string;
+  /** Set once the guest account is registered with email and password; null for guests. */
+  email: string | null;
+  /** Avatar id (`AVATARS`). */
+  avatar: string;
+  stats: PlayerStats;
   xp: number;
   level: number;
   xpIntoLevel: number;
@@ -32,6 +37,17 @@ export interface Profile {
     /** Coins today's claim gives. */
     reward: number;
   };
+}
+
+/** Lifetime totals over all recorded matches. */
+export interface PlayerStats {
+  matches: number;
+  wins: number;
+  kills: number;
+  /** Best placement (1 = won); null before the first match. */
+  bestPlacement: number | null;
+  /** Total time alive in matches. */
+  survivalMs: number;
 }
 
 /** End-of-season reward for one player. */

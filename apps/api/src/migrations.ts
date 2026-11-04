@@ -58,4 +58,10 @@ export const MIGRATIONS: string[] = [
 
   ALTER TABLE players DROP COLUMN rating
   `,
+  `
+  ALTER TABLE players ADD COLUMN email text;
+  ALTER TABLE players ADD COLUMN password_hash text;
+  ALTER TABLE players ADD COLUMN avatar text NOT NULL DEFAULT 'snake';
+  CREATE UNIQUE INDEX players_email ON players (email)
+  `,
 ];

@@ -3,10 +3,13 @@ import {
   FREE_SKINS,
   STARTING_COINS,
   dailyReward,
+  getAvatar,
   getSkin,
   levelFromXp,
   matchReward,
   nextStreak,
+  normalizeEmail,
+  passwordProblem,
   sanitizeName,
   applyRating,
   ratingDelta,
@@ -15,10 +18,12 @@ import {
   type Grant,
   type MatchResultEntry,
   type MatchReport,
+  type PlayerStats,
   type Profile,
 } from '@snake/meta';
 import type { Db } from './db';
 import { ApiError } from './errors';
+import { hashPassword, verifyPassword } from './passwords';
 import { lockSeasonRating, pendingSeasonReward, recordSeasonResult, seasonRating, standing } from './seasons';
 
 export { ApiError };
@@ -26,6 +31,8 @@ export { ApiError };
 interface PlayerRow {
   id: string;
   name: string;
+  email: string | null;
+  avatar: string;
   xp: number;
   coins: number;
   equipped_skin: string;
@@ -34,7 +41,7 @@ interface PlayerRow {
   daily_streak: number;
 }
 
-const PLAYER_COLUMNS = 'id, name, xp, coins, equipped_skin, daily_last_claim::text AS daily_last_claim, daily_streak';
+const PLAYER_COLUMNS = 'id, name, email, avatar, xp, coins, equipped_skin, daily_last_claim::text AS daily_last_claim, daily_streak';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function loadRow(db: Db, id: string, lock = false): Promise<PlayerRow | null> {
@@ -54,11 +61,24 @@ async function ownedItems(db: Db, id: string): Promise<string[]> {
   return [...FREE_SKINS, ...rows.map((r) => r.item_id).filter((i) => !FREE_SKINS.includes(i))];
 }
 
-function toProfile(row: PlayerRow, owned: string[], now: Date, ranked: Pick<Profile, 'season' | 'seasonReward'>): Profile {
+async function playerStats(db: Db, id: string): Promise<PlayerStats> {
+  const [row] = await db.query<{ matches: number; wins: number; kills: number; best: number | null; survival: number }>(
+    `SELECT count(*)::int AS matches, (count(*) FILTER (WHERE placement = 1))::int AS wins, coalesce(sum(kills), 0)::int AS kills,
+       min(placement) AS best, coalesce(sum(survival_ms), 0)::float8 AS survival
+     FROM match_results WHERE player_id = $1`,
+    [id],
+  );
+  return { matches: row?.matches ?? 0, wins: row?.wins ?? 0, kills: row?.kills ?? 0, bestPlacement: row?.best ?? null, survivalMs: row?.survival ?? 0 };
+}
+
+function toProfile(row: PlayerRow, owned: string[], stats: PlayerStats, now: Date, ranked: Pick<Profile, 'season' | 'seasonReward'>): Profile {
   const next = nextStreak(row.daily_last_claim, row.daily_streak, utcDay(now));
   return {
     id: row.id,
     name: row.name,
+    email: row.email,
+    avatar: row.avatar,
+    stats,
     xp: row.xp,
     ...levelFromXp(row.xp),
     coins: row.coins,
@@ -77,7 +97,7 @@ function toProfile(row: PlayerRow, owned: string[], now: Date, ranked: Pick<Prof
 export async function getProfile(db: Db, id: string, now: Date): Promise<Profile> {
   const row = await requireRow(db, id);
   const season = seasonAt(now);
-  return toProfile(row, await ownedItems(db, id), now, {
+  return toProfile(row, await ownedItems(db, id), await playerStats(db, id), now, {
     season: await standing(db, season, id),
     seasonReward: await pendingSeasonReward(db, season, id),
   });
@@ -95,6 +115,60 @@ export async function rename(db: Db, id: string, name: unknown): Promise<void> {
   if (!clean) throw new ApiError(400, 'invalid_name', 'Name must contain letters or digits');
   await requireRow(db, id);
   await db.query('UPDATE players SET name = $2 WHERE id = $1', [id, clean]);
+}
+
+export async function setAvatar(db: Db, id: string, avatar: unknown): Promise<void> {
+  const found = typeof avatar === 'string' ? getAvatar(avatar) : undefined;
+  if (!found) throw new ApiError(400, 'invalid_avatar', 'No such avatar');
+  await requireRow(db, id);
+  await db.query('UPDATE players SET avatar = $2 WHERE id = $1', [id, found.id]);
+}
+
+const isUniqueViolation = (e: unknown) => (e as { code?: string } | null)?.code === '23505';
+
+/**
+ * Registers an email and password. A signed-in guest keeps their progress: the
+ * credentials are attached to that account. Without a guest (or when the current
+ * account is already registered) a new account is created.
+ */
+export async function register(db: Db, guestId: string | null, email: unknown, password: unknown, name: unknown): Promise<string> {
+  const cleanEmail = normalizeEmail(email);
+  if (!cleanEmail) throw new ApiError(400, 'invalid_email', 'Enter a valid email address');
+  const problem = passwordProblem(password);
+  if (problem) throw new ApiError(400, 'invalid_password', problem);
+  const taken = () => new ApiError(409, 'email_taken', 'An account with this email already exists');
+  if ((await db.query('SELECT 1 FROM players WHERE email = $1', [cleanEmail])).length > 0) throw taken();
+  const hash = await hashPassword(password as string);
+  try {
+    const guest = guestId ? await loadRow(db, guestId) : null;
+    if (guest && guest.email === null) {
+      const updated = await db.query('UPDATE players SET email = $2, password_hash = $3 WHERE id = $1 AND email IS NULL RETURNING id', [guest.id, cleanEmail, hash]);
+      if (updated.length > 0) return guest.id;
+    }
+    const id = await createGuest(db, name);
+    await db.query('UPDATE players SET email = $2, password_hash = $3 WHERE id = $1', [id, cleanEmail, hash]);
+    return id;
+  } catch (e) {
+    if (isUniqueViolation(e)) throw taken();
+    throw e;
+  }
+}
+
+// Checked against when the email is unknown, so a miss takes as long as a wrong password.
+let dummyHash: Promise<string> | null = null;
+
+/** The account id for these credentials; the same error for an unknown email and a wrong password. */
+export async function login(db: Db, email: unknown, password: unknown): Promise<string> {
+  const wrong = new ApiError(401, 'invalid_credentials', 'Wrong email or password');
+  const cleanEmail = normalizeEmail(email);
+  if (!cleanEmail || typeof password !== 'string' || passwordProblem(password)) throw wrong;
+  const [row] = await db.query<{ id: string; password_hash: string | null }>('SELECT id, password_hash FROM players WHERE email = $1', [cleanEmail]);
+  if (!row?.password_hash) {
+    await verifyPassword(password, await (dummyHash ??= hashPassword('not-a-real-password')));
+    throw wrong;
+  }
+  if (!(await verifyPassword(password, row.password_hash))) throw wrong;
+  return row.id;
 }
 
 export async function claimDaily(db: Db, id: string, now: Date): Promise<number> {

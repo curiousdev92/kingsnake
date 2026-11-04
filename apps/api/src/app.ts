@@ -4,7 +4,7 @@ import { signPlayerToken, verifyPlayerToken } from '@snake/auth';
 import { SKINS, seasonAt, seasonById, type MatchReport } from '@snake/meta';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import type { Db } from './db';
-import { ApiError, buy, claimDaily, createGuest, equip, getProfile, publicPlayer, recordMatch, rename } from './players';
+import { ApiError, buy, claimDaily, createGuest, equip, getProfile, login, publicPlayer, recordMatch, register, rename, setAvatar } from './players';
 import { claimSeasonReward, leaderboard } from './seasons';
 import { allowRequest } from './redis';
 
@@ -47,6 +47,14 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     return id;
   };
 
+  /** Like `playerOf`, but a missing or bad token means "nobody" instead of 401. */
+  const optionalPlayerOf = async (req: FastifyRequest): Promise<string | null> => {
+    const header = req.headers.authorization ?? '';
+    return header.startsWith('Bearer ') ? verifyPlayerToken(header.slice(7), authSecret) : null;
+  };
+
+  const rateLimited = { error: 'rate_limited', message: 'Too many attempts, try again in a minute' };
+
   const requireInternal = (req: FastifyRequest): void => {
     const given = Buffer.from(String(req.headers['x-internal-key'] ?? ''));
     const expected = Buffer.from(internalKey);
@@ -69,11 +77,28 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     return { token: await signPlayerToken(id, authSecret), profile: await getProfile(db, id, now()) };
   });
 
+  /** Email + password sign-up. A signed-in guest's progress moves to the new login. */
+  app.post('/auth/register', async (req, reply) => {
+    if (!(await allowRequest(`register:${req.ip}`))) return reply.status(429).send(rateLimited);
+    const b = body(req);
+    const id = await register(db, await optionalPlayerOf(req), b.email, b.password, b.name);
+    return { token: await signPlayerToken(id, authSecret), profile: await getProfile(db, id, now()) };
+  });
+
+  app.post('/auth/login', async (req, reply) => {
+    if (!(await allowRequest(`login:${req.ip}`))) return reply.status(429).send(rateLimited);
+    const id = await login(db, body(req).email, body(req).password);
+    return { token: await signPlayerToken(id, authSecret), profile: await getProfile(db, id, now()) };
+  });
+
   app.get('/me', async (req) => getProfile(db, await playerOf(req), now()));
 
+  /** Changes `name` and/or `avatar`. */
   app.patch('/me', async (req) => {
     const id = await playerOf(req);
-    await rename(db, id, body(req).name);
+    const b = body(req);
+    if ('avatar' in b) await setAvatar(db, id, b.avatar);
+    if ('name' in b || !('avatar' in b)) await rename(db, id, b.name);
     return getProfile(db, id, now());
   });
 
@@ -96,9 +121,8 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     const query = req.query as { season?: string };
     const season = query.season === undefined ? seasonAt(now()) : seasonById(query.season);
     if (!season) throw new ApiError(400, 'invalid_season', 'Season ids look like 2026-10');
-    const header = req.headers.authorization ?? '';
     // Signed-in viewers also get their own line; a bad token just means no line.
-    const viewer = header.startsWith('Bearer ') ? await verifyPlayerToken(header.slice(7), authSecret) : null;
+    const viewer = await optionalPlayerOf(req);
     return { season, ...(await leaderboard(db, season, viewer)) };
   });
 
