@@ -62,6 +62,11 @@ export class SpritePool {
 
   /** Places the next sprite as a circle of world radius `r` at (x, y). */
   place(x: number, y: number, r: number, tint: number, alpha = 1, texture = this.texture): void {
+    this.placeSprite(texture, x, y, r / TEX_RADIUS, 0, tint, alpha);
+  }
+
+  /** Places the next sprite, centred on (x, y), scaled and rotated. */
+  placeSprite(texture: Texture, x: number, y: number, scale: number, rotation: number, tint: number, alpha = 1): void {
     const children = this.container.children as Sprite[];
     let s = children[this.used];
     if (!s) {
@@ -73,7 +78,8 @@ export class SpritePool {
     }
     s.visible = true;
     s.position.set(x, y);
-    s.scale.set(r / TEX_RADIUS);
+    s.scale.set(scale);
+    s.rotation = rotation;
     s.tint = tint;
     s.alpha = alpha;
     this.used++;

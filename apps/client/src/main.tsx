@@ -3,12 +3,14 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { initAccount } from './account';
+import { installDemoSkinArt } from './game/demoSkinArt';
 import { Gallery } from './Gallery';
 import { OnlineApp } from './OnlineApp';
 import { useRoute } from './routes';
 import { SettingsPage } from './Settings';
 
 applyTheme(themeMono);
+installDemoSkinArt();
 void initAccount();
 
 /** Home (and online play) by default; `#practice` is offline play, `#settings` the settings page. */

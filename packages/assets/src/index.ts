@@ -1,5 +1,5 @@
 import { manifest as shipped } from '../assets.manifest';
-import type { AssetManifest, IconName, ImageSource, NineSlice, NineSliceName } from './types';
+import type { AssetManifest, IconName, ImageSource, NineSlice, NineSliceName, SkinArt } from './types';
 
 export * from './types';
 /** The manifest checked into the repo. */
@@ -19,6 +19,11 @@ export function getNineSlice(name: NineSliceName): NineSlice | undefined {
 
 export function getIcon(name: IconName): ImageSource | undefined {
   return active.icons[name];
+}
+
+/** Art for a snake skin, or undefined so the renderer draws palette circles. */
+export function getSkinArt(skinId: string): SkinArt | undefined {
+  return active.skins?.[skinId];
 }
 
 /**

@@ -2,12 +2,14 @@ import type { Vec2 } from '@snake/game-core';
 import { getSkin } from '@snake/meta';
 import { Application, Container, Graphics } from 'pixi.js';
 import { Effects } from './Effects';
+import { loadSkinTextures, SEGMENT_PX, type SkinTextures } from './skinTextures';
 import { makeRoundTextures, SpritePool } from './SpritePool';
 
-/** A skin's palette as Pixi colours, banded along the body. */
+/** A skin's palette as Pixi colours, banded along the body, plus its art once loaded. */
 interface Paint {
   colors: number[];
   band: number;
+  skinId?: string;
 }
 
 // Phase 1 placeholder look: plain circles in each skin's palette. Atlases plug in later.
@@ -77,6 +79,8 @@ export class Renderer {
   private zoom = 1;
   private camera: Vec2 = { x: 0, y: 0 };
   private paints = new Map<number, Paint>();
+  /** Loaded skin art by skin id. Skins load in the background and draw as circles until ready. */
+  private readonly art = new Map<string, SkinTextures>();
   private arenaDrawn = { radius: -1, target: -1 };
   // Last frame's living snakes and pellets, diffed to spawn death and eat effects.
   private lastSnakes = new Map<number, { segments: Vec2[]; radius: number; colors: number[] }>();
@@ -87,7 +91,13 @@ export class Renderer {
     this.paints = new Map();
     for (const [id, skinId] of skins) {
       const skin = getSkin(skinId);
-      if (skin) this.paints.set(id, { colors: skin.palette.map((c) => parseInt(c.slice(1), 16)), band: skin.band });
+      if (!skin) continue;
+      this.paints.set(id, { colors: skin.palette.map((c) => parseInt(c.slice(1), 16)), band: skin.band, skinId });
+      if (!this.art.has(skinId)) {
+        void loadSkinTextures(skinId).then((tex) => {
+          if (tex) this.art.set(skinId, tex);
+        });
+      }
     }
   }
 
@@ -239,6 +249,8 @@ export class Renderer {
   }
 
   private drawSnake(prev: RenderSnake, cur: RenderSnake, alpha: number, paint: Paint, v: Bounds): void {
+    const art = paint.skinId === undefined ? undefined : this.art.get(paint.skinId);
+    if (art) return this.drawSnakeArt(prev, cur, alpha, paint, art, v);
     const { colors, band } = paint;
     const color = colors[0]!;
     const pool = this.snakes;
@@ -287,6 +299,64 @@ export class Renderer {
       const ey = hy + Math.sin(angle + side * 0.6) * r * 0.55;
       pool.place(ex, ey, r * 0.22, COLORS.eye, 1, disc);
     }
+  }
+
+  /**
+   * Draws a snake from its skin art: tail tip, body segments (alternating per band), then
+   * the head and eyes on top. Each part faces toward the head, along the body.
+   */
+  private drawSnakeArt(prev: RenderSnake, cur: RenderSnake, alpha: number, paint: Paint, art: SkinTextures, v: Bounds): void {
+    const { colors, band } = paint;
+    const pool = this.snakes;
+    const r = lerp(prev.radius, cur.radius, alpha);
+    const segs = cur.segments;
+    const prevSegs = prev.segments;
+    const n = segs.length;
+    if (n === 0) return;
+    // World units per 1x art pixel: a 64 px segment is as wide as the snake.
+    const scale = (2 * r) / SEGMENT_PX;
+    // Heads can be bigger than segments, so pad the cull bounds generously.
+    const pad = r * 2;
+    const x0 = v.x0 - pad;
+    const y0 = v.y0 - pad;
+    const x1 = v.x1 + pad;
+    const y1 = v.y1 + pad;
+    const bandOf = (k: number) => Math.floor(k / band);
+    const tintOf = (k: number) => (art.tint ? colors[bandOf(k) % colors.length]! : 0xffffff);
+
+    if (cur.boosting) {
+      const color = colors[0]!;
+      for (let k = n - 1; k >= 0; k -= 2) {
+        const b = segs[k]!;
+        const a = prevSegs[k] ?? b;
+        const x = a.x + (b.x - a.x) * alpha;
+        const y = a.y + (b.y - a.y) * alpha;
+        if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+        pool.place(x, y, r * 1.8, color, 0.14, this.textures.disc);
+      }
+    }
+
+    for (let k = n - 1; k >= 1; k--) {
+      const b = segs[k]!;
+      const a = prevSegs[k] ?? b;
+      const x = a.x + (b.x - a.x) * alpha;
+      const y = a.y + (b.y - a.y) * alpha;
+      if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+      // Face the next segment toward the head.
+      const ahead = segs[k - 1]!;
+      const rot = Math.atan2(ahead.y - b.y, ahead.x - b.x);
+      const tex = k === n - 1 && n > 2 ? art.tail : bandOf(k) % 2 === 1 ? art.segmentAlt : art.segment;
+      pool.placeSprite(tex, x, y, scale, rot, tintOf(k));
+    }
+
+    const hb = segs[0]!;
+    const ha = prevSegs[0] ?? hb;
+    const hx = lerp(ha.x, hb.x, alpha);
+    const hy = lerp(ha.y, hb.y, alpha);
+    if (hx < x0 || hx > x1 || hy < y0 || hy > y1) return;
+    const angle = prev.angle + angleDelta(prev.angle, cur.angle) * alpha;
+    pool.placeSprite(cur.boosting ? art.headBoost : art.head, hx, hy, scale, angle, tintOf(0));
+    if (art.eyes) pool.placeSprite(art.eyes, hx, hy, scale, angle, 0xffffff);
   }
 }
 
