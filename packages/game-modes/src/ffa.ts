@@ -1,6 +1,6 @@
 import type { GameMode } from './types';
 
-/** Free-for-all: twenty snakes, last one alive wins. The default. */
+/** Free-for-all: twenty snakes, last one alive wins. A fixed-size arena that never shrinks. The default. */
 export const ffa: GameMode = {
   id: 'ffa',
   room: 'arena',

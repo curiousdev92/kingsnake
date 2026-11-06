@@ -14,10 +14,8 @@ export interface SimConfig {
   boostCostPerSecond: number;
   /** Boost is unavailable below this mass. */
   minBoostMass: number;
-  /** Radians per second for a starting-size snake. */
-  baseTurnRate: number;
-  /** Turn rate is divided by (1 + mass / turnRateMassFalloff). */
-  turnRateMassFalloff: number;
+  /** Radians per second. The same for every snake, whatever its mass. */
+  turnRate: number;
   startMass: number;
   segmentSpacing: number;
   /** Body length in world units = baseLength + mass * lengthPerMass. */
@@ -40,6 +38,10 @@ export interface SimConfig {
   shrinkSchedule: ShrinkStep[];
   /** World units per second the arena edge moves toward its target. */
   shrinkSpeed: number;
+  /** Rocks per 10,000 square units of arena. A head touching a rock dies. */
+  obstacleDensity: number;
+  obstacleMinRadius: number;
+  obstacleMaxRadius: number;
   headToHead: 'both-die' | 'bigger-wins';
 }
 
@@ -54,10 +56,8 @@ export const defaultConfig: Readonly<SimConfig> = deepFreeze({
   boostMultiplier: 2,
   boostCostPerSecond: 2,
   minBoostMass: 12,
-  baseTurnRate: 12,
-  // Starting snakes (mass 20) turn at ~10 rad/s, mass 200 at ~4.5, mass 1000 at ~1.3,
-  // so big snakes trade agility for reach.
-  turnRateMassFalloff: 120,
+  // Constant for all masses: a huge snake turns like a tiny starter snake.
+  turnRate: 10,
   startMass: 20,
   segmentSpacing: 9,
   baseLength: 60,
@@ -73,13 +73,12 @@ export const defaultConfig: Readonly<SimConfig> = deepFreeze({
   arenaBaseRadius: 900,
   // 20-snake rooms: 900 + 20 × 90 = 2700 units, keeping pellet counts manageable.
   arenaPerPlayer: 90,
-  shrinkSchedule: [
-    { atSecond: 30, radiusFactor: 0.75 },
-    { atSecond: 75, radiusFactor: 0.5 },
-    { atSecond: 120, radiusFactor: 0.3 },
-    { atSecond: 165, radiusFactor: 0.15 },
-  ],
+  // The arena only closes in modes that ask for it (battle royale, duel).
+  shrinkSchedule: [],
   shrinkSpeed: 12,
+  obstacleDensity: 0.03,
+  obstacleMinRadius: 24,
+  obstacleMaxRadius: 60,
   headToHead: 'both-die',
 });
 

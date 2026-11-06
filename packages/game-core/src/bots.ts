@@ -2,6 +2,7 @@ import type { SimConfig } from './config';
 import { dist2, wrapAngle } from './math';
 import { SpatialHash } from './spatialHash';
 import type { GameState, Input, Pellet, Snake } from './types';
+import { touchesObstacle } from './world';
 
 const CANDIDATES = 11;
 const SPREAD = 0.32; // radians between candidate headings
@@ -34,6 +35,7 @@ export function botInput(state: GameState, bot: Snake, cfg: SimConfig): Input {
       const weight = 200 / d;
       if (dist2(px, py, center.x, center.y) > edge * edge) danger += weight;
       if (hitsBody(state, bot, px, py)) danger += weight * 2;
+      if (touchesObstacle(state.obstacles, px, py, bot.radius + 8)) danger += weight * 3;
     }
     const score =
       -danger * 10 +

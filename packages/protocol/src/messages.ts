@@ -146,8 +146,8 @@ export interface PelletSnap {
   value: number;
 }
 
-export type DeathCause = 'body' | 'head' | 'arena';
-const CAUSES: DeathCause[] = ['body', 'head', 'arena'];
+export type DeathCause = 'body' | 'head' | 'arena' | 'rock';
+const CAUSES: DeathCause[] = ['body', 'head', 'arena', 'rock'];
 
 export interface DeathSnap {
   snakeId: number;
@@ -238,6 +238,8 @@ export interface MatchMsg {
   lobby: LobbyInfo;
   /** The server's simulation config, so client-side body rebuilding matches. */
   config: SimConfig;
+  /** The match's rocks (static for the whole match); empty before the first match starts. */
+  obstacles: { x: number; y: number; radius: number }[];
 }
 
 /** Server -> client JSON message at match end with the account's rewards (a @snake/meta Grant). */

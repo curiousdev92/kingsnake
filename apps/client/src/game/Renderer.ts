@@ -21,6 +21,8 @@ const COLORS = {
   player: 0xffffff,
   bot: 0xb5b5b5,
   eye: 0x000000,
+  rock: 0x3a3a3a,
+  rockEdge: 0x8a8a8a,
 };
 const GRID = 64;
 const GRID_EXTENT = 4000;
@@ -51,6 +53,8 @@ export interface RenderWorld {
   snakes: readonly RenderSnake[];
   pellets: readonly RenderPellet[];
   arena: { center: Vec2; radius: number; targetRadius: number };
+  /** Static rocks; the same array for the whole match (a new array triggers a redraw). */
+  obstacles?: readonly { x: number; y: number; radius: number }[];
 }
 
 interface Bounds {
@@ -72,11 +76,12 @@ export class Renderer {
   private readonly world = new Container();
   private readonly grid = new Graphics();
   private readonly arena = new Graphics();
+  private readonly rocks = new Graphics();
+  private rocksDrawn: RenderWorld['obstacles'] = undefined;
   private readonly textures = makeRoundTextures();
   private readonly pellets = new SpritePool(this.textures.disc);
   private readonly snakes = new SpritePool(this.textures.body);
   private readonly effects = new Effects(this.textures.disc);
-  private zoom = 1;
   private camera: Vec2 = { x: 0, y: 0 };
   private paints = new Map<number, Paint>();
   /** Loaded skin art by skin id. Skins load in the background and draw as circles until ready. */
@@ -110,7 +115,7 @@ export class Renderer {
       autoDensity: true,
     });
     host.appendChild(this.app.canvas);
-    this.world.addChild(this.grid, this.pellets.container, this.snakes.container, this.effects.container, this.arena);
+    this.world.addChild(this.grid, this.rocks, this.pellets.container, this.snakes.container, this.effects.container, this.arena);
     this.app.stage.addChild(this.world);
     this.drawGrid();
   }
@@ -126,16 +131,14 @@ export class Renderer {
     const focus = cur.snakes.find((s) => s.id === focusId);
     const focusPrev = focusId === null ? undefined : prevById.get(focusId);
 
-    // Camera follows the focused head and zooms out as it grows; holds still once dead.
+    // Camera follows the focused head; holds still once dead. The zoom is fixed.
     if (focus?.alive && focusPrev) {
       this.camera = { x: lerp(focusPrev.head.x, focus.head.x, alpha), y: lerp(focusPrev.head.y, focus.head.y, alpha) };
-      const targetZoom = Math.max(0.45, Math.min(1, 1 / (1 + (focus.mass - 20) / 300)));
-      this.zoom += (targetZoom - this.zoom) * 0.05;
     }
     const { width, height } = this.app.screen;
     // Fit more of the arena on small screens.
     const screenScale = Math.min(1, Math.min(width, height) / 700);
-    const z = this.zoom * screenScale;
+    const z = screenScale;
     this.world.scale.set(z);
     this.world.position.set(width / 2 - this.camera.x * z, height / 2 - this.camera.y * z);
     const hw = width / 2 / z + CULL_MARGIN;
@@ -143,6 +146,7 @@ export class Renderer {
     const view: Bounds = { x0: this.camera.x - hw, y0: this.camera.y - hh, x1: this.camera.x + hw, y1: this.camera.y + hh };
 
     this.drawArena(lerp(prev.arena.radius, cur.arena.radius, alpha), cur);
+    this.drawRocks(cur.obstacles);
     this.drawPellets(cur, view);
 
     const pool = this.snakes;
@@ -161,6 +165,8 @@ export class Renderer {
   /** Clears the world (between matches) but keeps the grid. */
   clear(): void {
     this.arena.clear();
+    this.rocks.clear();
+    this.rocksDrawn = undefined;
     this.arenaDrawn = { radius: -1, target: -1 };
     this.pellets.clear();
     this.snakes.clear();
@@ -235,6 +241,25 @@ export class Renderer {
     g.circle(x, y, radius).stroke({ width: 4, color: COLORS.edge });
     if (s.arena.targetRadius < radius - 1) {
       g.circle(x, y, s.arena.targetRadius).stroke({ width: 2, color: COLORS.edge, alpha: 0.3 });
+    }
+  }
+
+  /** Rocks never move, so the geometry is rebuilt only when the obstacle list changes. */
+  private drawRocks(obstacles: RenderWorld['obstacles']): void {
+    if (obstacles === this.rocksDrawn) return;
+    this.rocksDrawn = obstacles;
+    const g = this.rocks.clear();
+    for (const o of obstacles ?? []) {
+      // A lumpy polygon, seeded by position so every client draws the same rock.
+      const points: number[] = [];
+      const sides = 11;
+      const seed = o.x * 12.9898 + o.y * 78.233;
+      for (let i = 0; i < sides; i++) {
+        const wobble = 0.82 + 0.18 * Math.abs(Math.sin(seed + i * 2.399));
+        const a = (i / sides) * Math.PI * 2;
+        points.push(o.x + Math.cos(a) * o.radius * wobble, o.y + Math.sin(a) * o.radius * wobble);
+      }
+      g.poly(points).fill({ color: COLORS.rock }).stroke({ width: 3, color: COLORS.rockEdge });
     }
   }
 

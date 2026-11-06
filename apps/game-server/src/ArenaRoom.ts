@@ -336,6 +336,7 @@ export class ArenaRoom extends Room {
         mode: this.mode.id,
       },
       config: this.cfg,
+      obstacles: this.match ? [...this.match.state.obstacles] : [],
     };
   }
 

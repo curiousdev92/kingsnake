@@ -1,11 +1,11 @@
 import { token } from "@snake/design-tokens";
 import { getMode } from "@snake/game-modes";
 import type { LobbyInfo } from "@snake/protocol";
-import { Button, Panel } from "@snake/ui-kit";
+import { Button, Modal, Panel } from "@snake/ui-kit";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { create } from "zustand";
 import { refreshProfile, savedName, sessionToken, useAccount } from "./account";
-import { OnlineGame, type JoinRequest, type OnlineStats } from "./game/OnlineGame";
+import { OnlineGame, type JoinRequest, type OnlineStats, type StandingRow } from "./game/OnlineGame";
 import { Renderer } from "./game/Renderer";
 import { Home, normalizeCode } from "./Home";
 
@@ -146,6 +146,7 @@ function GameView({
       <div ref={host} style={{ position: "absolute", inset: 0 }} />
       <Hud />
       <PhaseOverlay game={game} onLeave={onLeave} />
+      <GameOverModal onLeave={onLeave} />
       {game && <NetPanel game={game} onLeave={onLeave} />}
     </div>
   );
@@ -155,32 +156,142 @@ function Hud() {
   const s = useOnline();
   if (!s || s.phase !== "playing") return null;
   return (
-    <Panel
+    <div
       style={{
         position: "absolute",
         top: 12,
         left: 12,
-        padding: token("space.md"),
+        display: "grid",
+        gap: 8,
+        justifyItems: "start",
         pointerEvents: "none",
       }}
     >
-      <div
-        style={{
-          fontFamily: token("font.display"),
-          fontSize: token("font.sizeLg"),
-        }}
-      >
-        {s.youAlive ? s.mass : "—"}
-      </div>
-      <div
-        style={{
-          color: token("color.textMuted"),
-          fontSize: token("font.sizeSm"),
-        }}
-      >
-        {s.alive} / {s.total} alive
-      </div>
+      <Panel style={{ padding: token("space.md") }}>
+        <div
+          style={{
+            fontFamily: token("font.display"),
+            fontSize: token("font.sizeLg"),
+          }}
+        >
+          {s.youAlive ? s.mass : "—"}
+        </div>
+        <div
+          style={{
+            color: token("color.textMuted"),
+            fontSize: token("font.sizeSm"),
+          }}
+        >
+          {s.alive} / {s.total} alive
+        </div>
+      </Panel>
+      <Standings rows={s.standings} />
+    </div>
+  );
+}
+
+/** Top 5 by mass; the local player is added below a gap when ranked lower or eliminated. */
+function Standings({ rows }: { rows: StandingRow[] }) {
+  if (rows.length === 0) return null;
+  const gap = rows.length > 1 && rows[rows.length - 1]!.you && rows[rows.length - 1]!.rank > rows.length;
+  return (
+    <Panel
+      style={{
+        padding: token("space.sm"),
+        width: 190,
+        boxSizing: "border-box",
+        fontSize: token("font.sizeSm"),
+        fontVariantNumeric: "tabular-nums",
+      }}
+    >
+      <div style={{ color: token("color.textMuted"), marginBottom: 4 }}>Standings</div>
+      {rows.map((r, i) => (
+        <div key={r.you ? "you" : r.rank}>
+          {gap && i === rows.length - 1 && (
+            <div style={{ color: token("color.textMuted"), textAlign: "center", lineHeight: 1 }}>⋯</div>
+          )}
+          <div
+            style={{
+              display: "flex",
+              gap: 6,
+              padding: "1px 0",
+              fontWeight: r.you ? 700 : 400,
+              opacity: r.out ? 0.6 : 1,
+            }}
+          >
+            <span style={{ width: 18, textAlign: "right" }}>{r.rank}</span>
+            <span
+              style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            >
+              {r.you ? `${r.name} (you)` : r.name}
+            </span>
+            <span>{r.out ? "out" : r.mass}</span>
+          </div>
+        </div>
+      ))}
     </Panel>
+  );
+}
+
+const formatTime = (sec: number) =>
+  `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+
+/** Shown once the local player dies: the game's numbers, and a way back to the main page. */
+function GameOverModal({ onLeave }: { onLeave: () => void }) {
+  const s = useOnline();
+  const [hidden, setHidden] = useState(false);
+  const alive = s?.youAlive ?? false;
+  // A new life (next match) shows the modal again.
+  useEffect(() => {
+    if (alive) setHidden(false);
+  }, [alive]);
+
+  const d = s?.deathStats;
+  const open = !!s && !!d && (s.phase === "playing" || s.phase === "ended") && !hidden;
+  if (!s || !d) return null;
+
+  const row = (label: string, value: ReactNode) => (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+      <span style={{ color: token("color.textMuted") }}>{label}</span>
+      <b>{value}</b>
+    </div>
+  );
+  return (
+    <Modal open={open} onClose={() => setHidden(true)} title="You died" width={380}>
+      <div style={{ display: "grid", gap: token("space.md") }}>
+        <div style={{ color: token("color.textMuted") }}>
+          You {d.deathReason ?? "died"}
+        </div>
+        <div style={{ ...title, textAlign: "center" }}>
+          #{d.placement} <span style={{ fontSize: token("font.sizeMd") }}>of {d.total}</span>
+        </div>
+        <div style={{ display: "grid", gap: 6 }}>
+          {row("Survived", formatTime(d.survivedSec))}
+          {row("Kills", d.kills)}
+          {row("Biggest size", d.peakMass)}
+          {row("Final size", d.finalMass)}
+          {s.rewards && row("Rewards", `+${s.rewards.xp} XP · +${s.rewards.coins} coins`)}
+          {s.rewards?.rating &&
+            row(
+              "Rating",
+              `${s.rewards.rating.after} (${s.rewards.rating.after >= s.rewards.rating.before ? "+" : ""}${s.rewards.rating.after - s.rewards.rating.before})`,
+            )}
+        </div>
+        {s.phase === "ended" && s.winnerName && (
+          <div style={{ textAlign: "center", color: token("color.textMuted") }}>
+            {s.winnerName} won the match
+          </div>
+        )}
+        <div style={{ display: "grid", gap: 8 }}>
+          <Button onClick={onLeave}>Back to main page</Button>
+          {s.phase === "playing" && (
+            <Button variant="secondary" onClick={() => setHidden(true)}>
+              Keep watching
+            </Button>
+          )}
+        </div>
+      </div>
+    </Modal>
   );
 }
 

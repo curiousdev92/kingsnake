@@ -2,7 +2,7 @@ import { createSnake, makeConfig } from '@snake/game-core';
 import { describe, expect, it } from 'vitest';
 import { KEYFRAME_TICKS, Match } from '../src/Match';
 
-const cfg = makeConfig({ shrinkSchedule: [] });
+const cfg = makeConfig({ shrinkSchedule: [], obstacleDensity: 0 });
 const dtMs = cfg.dt * 1000;
 
 function twoPlayers() {
