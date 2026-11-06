@@ -588,6 +588,12 @@ function NetPanel({ game, onLeave }: { game: OnlineGame; onLeave: () => void }) 
   });
   const [predict, setPredict] = useState(game.predict);
   const [autoInterp, setAutoInterp] = useState(game.autoInterp);
+  const [confirming, setConfirming] = useState(false);
+
+  // Leaving costs something only while your snake is still alive in a running match.
+  const inMatch = !!s && s.phase === "playing" && s.you !== null && s.youAlive;
+  const ranked = !!s?.lobby && !s.lobby.private && getMode(s.lobby.mode).ranked;
+  const requestLeave = () => (inMatch ? setConfirming(true) : onLeave());
 
   const update = (key: KnobKey, value: number) => {
     const next = { ...v, [key]: value };
@@ -616,9 +622,32 @@ function NetPanel({ game, onLeave }: { game: OnlineGame; onLeave: () => void }) 
       }}
     >
       <div style={{ display: "flex", gap: 8 }}>
-        <Button variant="secondary" onClick={onLeave} style={{ fontSize: token("font.sizeSm") }}>
+        <Button variant="secondary" onClick={requestLeave} style={{ fontSize: token("font.sizeSm") }}>
           Leave
         </Button>
+        <Modal open={confirming && inMatch} onClose={() => setConfirming(false)} title="Leave the game?" width={380}>
+          <div style={{ display: "grid", gap: token("space.md") }}>
+            <div>If you leave now:</div>
+            <ul style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 6 }}>
+              <li>
+                You give up your run: your snake is taken over by a bot, and you can't win this match.
+              </li>
+              <li>
+                Your rewards use where you stand right now (about #{s?.alive} of {s?.total}) and the
+                time you survived, so you earn less XP and fewer coins than by playing on.
+              </li>
+              {ranked && (
+                <li>This is a ranked duel: the match carries on against a bot, and you will likely lose rating.</li>
+              )}
+            </ul>
+            <div style={{ display: "grid", gap: 8 }}>
+              <Button onClick={() => setConfirming(false)}>Keep playing</Button>
+              <Button variant="secondary" onClick={onLeave}>
+                Leave anyway
+              </Button>
+            </div>
+          </div>
+        </Modal>
         {DEV_TOOLS && (
           <Button
             variant="secondary"

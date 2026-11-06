@@ -1,5 +1,5 @@
 import { signPlayerToken } from '@snake/auth';
-import { START_RATING, STARTING_COINS, dailyReward, getSkin, type Profile } from '@snake/meta';
+import { FREE_SKINS, START_RATING, STARTING_COINS, dailyReward, getSkin, matchReward, type Profile } from '@snake/meta';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app';
@@ -254,6 +254,138 @@ describe('match results (internal)', () => {
     const { profile } = await guest('Shown');
     const res = await app.inject({ url: `/internal/players/${profile.id}`, headers: { 'x-internal-key': INTERNAL } });
     expect(res.json()).toEqual({ id: profile.id, name: 'Shown', skin: 'classic', rating: START_RATING });
+  });
+});
+
+describe('score boards', () => {
+  const report = (matchId: string, playerId: string, placement: number, kills: number) =>
+    app.inject({
+      method: 'POST',
+      url: '/internal/match-results',
+      headers: { 'x-internal-key': INTERNAL },
+      payload: { matchId, totalPlayers: 8, results: [{ playerId, placement, kills, survivalMs: 30_000 }] },
+    });
+  const xp = (placement: number, kills: number) => matchReward({ placement, totalPlayers: 8, kills, survivalMs: 30_000 }).xp;
+
+  it('adds up XP across all matches for all time, and per month', async () => {
+    const saved = clock;
+    clock = new Date('2028-05-10T12:00:00Z'); // months no other test touches
+    const a = await guest('Boardy A');
+    const b = await guest('Boardy B');
+    const idle = await guest('Boardy Idle');
+    await report('b-may-1', a.profile.id, 1, 3);
+    await report('b-may-2', b.profile.id, 5, 0);
+    clock = new Date('2028-06-02T12:00:00Z');
+    await report('b-jun-1', b.profile.id, 1, 5);
+
+    // May: A beat B.
+    const may = (await app.inject({ url: '/leaderboard/monthly?month=2028-05', headers: authed(b.token) })).json();
+    expect(may.season.id).toBe('2028-05');
+    expect(may.top.map((e: { name: string; score: number; rank: number }) => [e.name, e.score, e.rank])).toEqual([
+      ['Boardy A', xp(1, 3), 1],
+      ['Boardy B', xp(5, 0), 2],
+    ]);
+    expect(may.you).toMatchObject({ name: 'Boardy B', you: true, rank: 2, matches: 1 });
+
+    // June (the current month): only B played.
+    const june = (await app.inject({ url: '/leaderboard/monthly', headers: authed(a.token) })).json();
+    expect(june.top.map((e: { name: string }) => e.name)).toEqual(['Boardy B']);
+    expect(june.top[0]).toMatchObject({ score: xp(1, 5), wins: 1, kills: 5 });
+    expect(june.you).toBeNull(); // A has no June matches
+
+    // All time spans both months and every player.
+    const all = (await app.inject({ url: '/leaderboard/overall', headers: authed(a.token) })).json();
+    expect(all).toMatchObject({ kind: 'overall', season: null });
+    const rowOf = (name: string) => all.top.find((e: { name: string }) => e.name === name);
+    expect(rowOf('Boardy B')).toMatchObject({ score: xp(5, 0) + xp(1, 5), matches: 2, wins: 1, kills: 5 });
+    expect(rowOf('Boardy A')).toMatchObject({ score: xp(1, 3), you: true });
+    expect(rowOf('Boardy Idle')).toBeUndefined(); // no matches, no line
+    expect(all.top.findIndex((e: { name: string }) => e.name === 'Boardy B')).toBeLessThan(
+      all.top.findIndex((e: { name: string }) => e.name === 'Boardy A'),
+    );
+
+    expect((await app.inject({ url: '/leaderboard/monthly?month=bogus' })).statusCode).toBe(400);
+    void idle;
+    clock = saved;
+  });
+});
+
+describe('monthly cash prizes', () => {
+  const internal = { 'x-internal-key': INTERNAL };
+  const report = (matchId: string, playerId: string, placement: number, kills: number) =>
+    app.inject({
+      method: 'POST',
+      url: '/internal/match-results',
+      headers: internal,
+      payload: { matchId, totalPlayers: 8, results: [{ playerId, placement, kills, survivalMs: 30_000 }] },
+    });
+  const me = async (token: string) => (await app.inject({ url: '/me', headers: authed(token) })).json() as Profile;
+  const claim = (token: string, details: unknown) =>
+    app.inject({ method: 'POST', url: '/me/monthly-prize', headers: authed(token), payload: { details } });
+
+  it('pays the top three of a finished month, once, by hand', async () => {
+    const saved = clock;
+    clock = new Date('2030-05-10T12:00:00Z');
+    const [a, b, c, d] = [await guest('Prize A'), await guest('Prize B'), await guest('Prize C'), await guest('Prize D')];
+    await report('p-1', a.profile.id, 1, 3);
+    await report('p-2', b.profile.id, 2, 1);
+    await report('p-3', c.profile.id, 5, 0);
+    await report('p-4', d.profile.id, 8, 0);
+
+    // During the month nothing is claimable yet.
+    expect((await me(a.token)).monthlyPrize).toBeNull();
+
+    clock = new Date('2030-06-02T12:00:00Z');
+    expect((await me(a.token)).monthlyPrize).toMatchObject({ rank: 1, amountUsd: 50, status: 'unclaimed', month: { id: '2030-05' } });
+    expect((await me(b.token)).monthlyPrize).toMatchObject({ rank: 2, amountUsd: 25 });
+    expect((await me(c.token)).monthlyPrize).toMatchObject({ rank: 3, amountUsd: 10 });
+    expect((await me(d.token)).monthlyPrize).toBeNull(); // 4th: no prize
+    expect((await claim(d.token, 'me@pay.example')).statusCode).toBe(409);
+
+    // Guests can't claim cash; the winner signs up (keeping the account) first.
+    expect((await claim(a.token, 'paypal: a@pay.example')).statusCode).toBe(403);
+    const reg = await app.inject({ method: 'POST', url: '/auth/register', headers: authed(a.token), payload: { email: 'prize-a@example.com', password: 'correct horse battery' } });
+    expect(reg.statusCode).toBe(200);
+    expect((await claim(a.token, 'x')).statusCode).toBe(400); // too short
+    expect((await claim(a.token, 'paypal: a@pay.example')).statusCode).toBe(200);
+    expect((await claim(a.token, 'paypal: a@pay.example')).statusCode).toBe(409);
+    expect((await me(a.token)).monthlyPrize).toMatchObject({ status: 'requested' });
+
+    // The owner sees who to pay, and marks it paid afterwards.
+    expect((await app.inject({ url: '/internal/monthly-prizes?month=2030-05' })).statusCode).toBe(401);
+    const list = (await app.inject({ url: '/internal/monthly-prizes', headers: internal })).json();
+    expect(list.month.id).toBe('2030-05');
+    expect(list.prizes.map((p: { name: string; amountUsd: number; status: string }) => [p.name, p.amountUsd, p.status])).toEqual([
+      ['Prize A', 50, 'requested'],
+      ['Prize B', 25, 'unclaimed'],
+      ['Prize C', 10, 'unclaimed'],
+    ]);
+    expect(list.prizes[0]).toMatchObject({ email: 'prize-a@example.com', payoutDetails: 'paypal: a@pay.example' });
+    const paid = { method: 'POST' as const, url: '/internal/monthly-prizes/paid', headers: internal, payload: { month: '2030-05', playerId: a.profile.id } };
+    expect((await app.inject(paid)).statusCode).toBe(200);
+    expect((await app.inject(paid)).statusCode).toBe(404); // already paid
+    expect((await me(a.token)).monthlyPrize).toMatchObject({ status: 'paid' });
+    clock = saved;
+  });
+});
+
+describe('duel season bonuses', () => {
+  it('top tiers also win an exclusive skin that cannot be bought', async () => {
+    const saved = clock;
+    const a = await guest('Skin Winner');
+    await db.query('INSERT INTO season_ratings (season_id, player_id, rating, wins) VALUES ($1, $2, 1520, 9)', ['2031-01', a.profile.id]);
+    clock = new Date('2031-02-05T12:00:00Z');
+    const before = (await app.inject({ url: '/me', headers: authed(a.token) })).json() as Profile;
+    expect(before.seasonReward).toMatchObject({ tier: 'Diamond', coins: 600, skin: 'diamond' });
+    expect(before.owned).not.toContain('diamond');
+    const claimed = (await app.inject({ method: 'POST', url: '/me/season-reward', headers: authed(a.token) })).json();
+    expect(claimed.profile.owned).toContain('diamond');
+    const equip = await app.inject({ method: 'POST', url: '/me/equip', headers: authed(a.token), payload: { itemId: 'diamond' } });
+    expect(equip.statusCode).toBe(200);
+    const other = await guest('No Skin');
+    expect((await app.inject({ method: 'POST', url: '/shop/buy', headers: authed(other.token), payload: { itemId: 'diamond' } })).statusCode).toBe(403);
+    expect(FREE_SKINS).not.toContain('diamond');
+    clock = saved;
   });
 });
 

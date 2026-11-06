@@ -7,9 +7,11 @@ import { Gallery } from "./Gallery";
 import { OnlineApp } from "./OnlineApp";
 import { useRoute } from "./routes";
 import { SettingsPage } from "./Settings";
+import { installUiSounds } from "./sound";
 
 applyTheme(themeMono);
 void initAccount();
+installUiSounds();
 
 /** Home (and online play) by default; `#practice` is offline play, `#settings` the settings page. */
 function Root() {

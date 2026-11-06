@@ -64,4 +64,17 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE players ADD COLUMN avatar text NOT NULL DEFAULT 'snake';
   CREATE UNIQUE INDEX players_email ON players (email)
   `,
+  `
+  CREATE TABLE monthly_prizes (
+    month_id text NOT NULL,
+    player_id uuid NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    rank integer NOT NULL,
+    amount_usd integer NOT NULL,
+    payout_details text NOT NULL,
+    status text NOT NULL DEFAULT 'requested' CHECK (status IN ('requested', 'paid')),
+    requested_at timestamptz NOT NULL DEFAULT now(),
+    paid_at timestamptz,
+    PRIMARY KEY (month_id, player_id)
+  )
+  `,
 ];

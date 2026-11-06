@@ -24,6 +24,7 @@ import {
 } from '@snake/protocol';
 import { PlayerInput } from './PlayerInput';
 import { haptic } from '../haptics';
+import { sfx } from '../sound';
 import type { Renderer } from './Renderer';
 
 const INPUT_INTERVAL_MS = 1000 / 30;
@@ -144,6 +145,7 @@ export class OnlineGame {
   private deathMass = 0;
   /** Own mass at the latest frame the snake was alive (the snapshot drops it before the death event lands). */
   private lastOwnMass = 0;
+  private lastTickSecond: number | null = null;
   private snakesNow: ViewSnake[] = [];
   private lastSample: { mass: number; alive: number; you: boolean; extrapolating: boolean } = { mass: 0, alive: 0, you: false, extrapolating: false };
   private connection: OnlineStats['connection'] = 'connecting';
@@ -239,6 +241,7 @@ export class OnlineGame {
       room.onMessage(REWARDS_MESSAGE, (g: Grant) =>
         this.down.deliver(() => {
           this.rewards = g;
+          sfx(g.levelAfter > g.levelBefore ? 'levelup' : 'coin');
           this.opts.onRewards?.(g);
         }, true),
       );
@@ -284,6 +287,14 @@ export class OnlineGame {
     this.world.cfg = m.config;
     this.predictor.setConfig(m.config);
     if (m.phase !== prev?.phase || m.you !== prev?.you) this.predictor.reset();
+    // Match start and result sounds, once per phase change.
+    if (m.phase !== prev?.phase) {
+      if (m.phase === 'playing' && m.you !== null) sfx('go');
+      if (m.phase === 'ended' && m.you !== null && m.winnerId === m.you) {
+        haptic('win');
+        sfx('win');
+      }
+    }
     if (m.phase === 'playing' && prev?.phase !== 'playing') {
       this.placement = 0;
       this.deathReason = null;
@@ -342,10 +353,12 @@ export class OnlineGame {
     for (const d of this.world.applyEventsUntil(renderTime)) {
       if (you !== null && d.killerId === you && d.snakeId !== you) {
         haptic('kill');
+        sfx('kill');
         this.kills++;
       }
       if (d.snakeId !== you) continue;
       haptic('death');
+      sfx('death');
       this.survivedMs = performance.now() - this.playStartAt;
       this.deathMass = this.lastOwnMass;
       this.placement = (this.world.buffer.latest?.snakes.length ?? 0) + 1;
@@ -430,6 +443,10 @@ export class OnlineGame {
     this.bytesWindow = this.bytesWindow.filter((e) => now - e.t < 1000);
     const m = this.match;
     const serverNow = this.clock.serverNow(now);
+    // Tick for each of the last three countdown seconds.
+    const secondsLeft = m?.phaseEndsAt != null && this.clock.synced ? Math.max(0, Math.ceil((m.phaseEndsAt - serverNow) / 1000)) : null;
+    if (m?.phase === 'countdown' && secondsLeft !== null && secondsLeft >= 1 && secondsLeft <= 3 && secondsLeft !== this.lastTickSecond) sfx('tick');
+    this.lastTickSecond = m?.phase === 'countdown' ? secondsLeft : null;
     this.onStats({
       connection: this.connection,
       queue: this.queueInfo && { rating: this.queueInfo.rating, seconds: Math.floor((now - this.queueInfo.since) / 1000) },

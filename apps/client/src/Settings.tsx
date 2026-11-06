@@ -6,6 +6,7 @@ import { ProfileModal, inputStyle } from './AccountUi';
 import { ApiFailure, rename, saveName, savedName, signOut, useAccount } from './account';
 import { hapticsEnabled, setHapticsEnabled } from './haptics';
 import { goHome } from './routes';
+import { setSoundEnabled, setSoundVolume, sfx, soundEnabled, soundVolume } from './sound';
 
 const small = { fontSize: token('font.sizeSm'), color: token('color.textMuted') } as const;
 
@@ -22,6 +23,18 @@ export function SettingsPage() {
           <h1 style={{ margin: 0, fontFamily: token('font.display'), fontSize: token('font.sizeXl') }}>Settings</h1>
         </header>
         <NameSetting />
+        <Section title="Sound">
+          <Toggle
+            label="Sound effects"
+            hint="Menu clicks, eating, kills, deaths and match results"
+            initial={soundEnabled()}
+            onChange={(on) => {
+              setSoundEnabled(on);
+              if (on) sfx('select');
+            }}
+          />
+          <VolumeSlider />
+        </Section>
         <Section title="Gameplay">
           <Toggle
             label="Vibration"
@@ -70,6 +83,30 @@ function Toggle({ label, hint, initial, onChange }: { label: string; hint: strin
           onChange(e.target.checked);
         }}
         style={{ width: 22, height: 22, accentColor: token('color.accent') }}
+      />
+    </label>
+  );
+}
+
+function VolumeSlider() {
+  const [volume, setVolume] = useState(soundVolume);
+  return (
+    <label style={{ display: 'flex', alignItems: 'center', gap: token('space.md') }}>
+      <span style={{ flex: 1 }}>Volume</span>
+      <input
+        type="range"
+        min={0}
+        max={1}
+        step={0.05}
+        value={volume}
+        aria-label="Sound volume"
+        onChange={(e) => {
+          const v = Number(e.target.value);
+          setVolume(v);
+          setSoundVolume(v);
+          sfx('eat'); // a preview at the new level
+        }}
+        style={{ width: 160, accentColor: token('color.accent') }}
       />
     </label>
   );

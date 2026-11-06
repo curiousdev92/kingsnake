@@ -2,6 +2,7 @@ import { token } from '@snake/design-tokens';
 import { AVATARS, MAX_NAME_LENGTH, MIN_PASSWORD_LENGTH, SKINS, getAvatar, getSkin, type Profile, type SnakeSkin } from '@snake/meta';
 import { Badge, Button, CurrencyPill, Modal, Panel, ProgressBar, Tabs } from '@snake/ui-kit';
 import { useState, type CSSProperties, type FormEvent } from 'react';
+import { sfx } from './sound';
 import { ApiFailure, buySkin, claimDaily, equipSkin, login, register, rename, setAvatar, signOut, useAccount } from './account';
 
 const small = { fontSize: token('font.sizeSm'), color: token('color.textMuted') } as const;
@@ -159,6 +160,7 @@ export function Shop({ open, onClose }: { open: boolean; onClose: () => void }) 
     try {
       await fn(id);
     } catch (e) {
+      sfx('error');
       setError(e instanceof ApiFailure ? e.message : 'Shop is unavailable right now');
     } finally {
       setBusy(null);
@@ -184,6 +186,8 @@ export function Shop({ open, onClose }: { open: boolean; onClose: () => void }) 
                 <Button variant="secondary" disabled={busy !== null} onClick={() => act(skin.id, equipSkin)} style={{ fontSize: token('font.sizeSm') }}>
                   Equip
                 </Button>
+              ) : skin.exclusive ? (
+                <span style={small}>{skin.exclusive}</span>
               ) : (
                 <Button disabled={busy !== null || profile.coins < skin.price} onClick={() => act(skin.id, buySkin)} style={{ fontSize: token('font.sizeSm') }}>
                   Buy {skin.price}
@@ -234,6 +238,7 @@ function Identity({ profile }: { profile: Profile }) {
     try {
       await fn();
     } catch (e) {
+      sfx('error');
       setError(errorText(e, 'Could not save, try again'));
     } finally {
       setBusy(false);
@@ -353,6 +358,7 @@ function AuthForm() {
     try {
       await (mode === 'register' ? register : login)(email, password);
     } catch (err) {
+      sfx('error');
       setError(errorText(err, 'Could not reach the server, try again'));
       setBusy(false);
     }

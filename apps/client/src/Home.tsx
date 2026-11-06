@@ -6,7 +6,7 @@ import { useState, type ReactNode } from 'react';
 import { AvatarBadge, DailyReward, ProfileModal, Shop, inputStyle } from './AccountUi';
 import { useAccount } from './account';
 import type { JoinRequest } from './game/OnlineGame';
-import { LeaderboardModal, SeasonReward } from './RankedUi';
+import { LeaderboardModal, MonthlyPrizeCard, SeasonReward } from './RankedUi';
 import { navigate } from './routes';
 
 export const CODE_LENGTH = 5;
@@ -143,6 +143,7 @@ export function Home({ onJoin }: { onJoin: (j: JoinRequest) => void }) {
           {profile && <XpBar xpIntoLevel={profile.xpIntoLevel} xpForNext={profile.xpForNext} />}
           <DailyReward />
           <SeasonReward />
+          <MonthlyPrizeCard />
           <div role="radiogroup" aria-label="Game mode" style={{ display: 'grid', gap: token('space.sm') }}>
             {CARDS.map((c) => (
               <ModeCard key={c.id} selected={c.id === card.id} onSelect={() => pick(c.id)} name={c.name} description={c.description} tag={c.tag} />

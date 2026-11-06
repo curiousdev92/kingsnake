@@ -1,3 +1,4 @@
+import type { MonthlyPrize } from './prizes';
 import type { SeasonStanding } from './season';
 
 export const MAX_NAME_LENGTH = 16;
@@ -27,6 +28,8 @@ export interface Profile {
   season: SeasonStanding;
   /** Last season's reward, while it is waiting to be claimed. */
   seasonReward: SeasonReward | null;
+  /** A cash prize won on last month's XP leaderboard, until it has been paid out. */
+  monthlyPrize: MonthlyPrize | null;
   equippedSkin: string;
   /** Owned skin ids, free ones included. */
   owned: string[];
@@ -55,6 +58,8 @@ export interface SeasonReward {
   standing: SeasonStanding;
   tier: string;
   coins: number;
+  /** Exclusive skin id that comes with the tier, if any. */
+  skin: string | null;
 }
 
 /** What a match result grants one player; forwarded to the client at match end. */

@@ -1,10 +1,12 @@
 import { timingSafeEqual } from 'node:crypto';
 import cors from '@fastify/cors';
 import { signPlayerToken, verifyPlayerToken } from '@snake/auth';
-import { SKINS, seasonAt, seasonById, type MatchReport } from '@snake/meta';
+import { SKINS, previousSeason, seasonAt, seasonById, type MatchReport } from '@snake/meta';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import type { Db } from './db';
 import { ApiError, buy, claimDaily, createGuest, equip, getProfile, login, publicPlayer, recordMatch, register, rename, setAvatar } from './players';
+import { scoreBoard } from './boards';
+import { claimMonthlyPrize, markPrizePaid, payoutList } from './prizes';
 import { claimSeasonReward, leaderboard } from './seasons';
 import { allowRequest } from './redis';
 
@@ -115,6 +117,13 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     return { coins, profile: await getProfile(db, id, now()) };
   });
 
+  /** Last month's top three claim a cash prize by leaving payout details (the owner pays by hand). */
+  app.post('/me/monthly-prize', async (req) => {
+    const id = await playerOf(req);
+    await claimMonthlyPrize(db, seasonAt(now()), id, body(req).details);
+    return getProfile(db, id, now());
+  });
+
   // ---- ranked ----
 
   /** A season's top 50 (`?season=YYYY-MM`, default current) plus, when signed in, your own line. */
@@ -125,6 +134,17 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     // Signed-in viewers also get their own line; a bad token just means no line.
     const viewer = await optionalPlayerOf(req);
     return { season, ...(await leaderboard(db, season, viewer)) };
+  });
+
+  /** Everyone, every mode, all time: ranked by XP earned. */
+  app.get('/leaderboard/overall', async (req) => scoreBoard(db, null, await optionalPlayerOf(req)));
+
+  /** Like overall, for one month (`?month=YYYY-MM`, default the current one). */
+  app.get('/leaderboard/monthly', async (req) => {
+    const query = req.query as { month?: string };
+    const month = query.month === undefined ? seasonAt(now()) : seasonById(query.month);
+    if (!month) throw new ApiError(400, 'invalid_month', 'Month ids look like 2026-10');
+    return scoreBoard(db, month, await optionalPlayerOf(req));
   });
 
   // ---- shop ----
@@ -150,6 +170,25 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     const player = await publicPlayer(db, (req.params as { id: string }).id, now());
     if (!player) throw new ApiError(404, 'player_not_found', 'Player not found');
     return player;
+  });
+
+  /** Who won a month's cash prizes, with payout details once claimed (`?month=YYYY-MM`, default last month). */
+  app.get('/internal/monthly-prizes', async (req) => {
+    requireInternal(req);
+    const q = req.query as { month?: string };
+    const month = q.month === undefined ? previousSeason(seasonAt(now())) : seasonById(q.month);
+    if (!month) throw new ApiError(400, 'invalid_month', 'Month ids look like 2026-10');
+    return { month, prizes: await payoutList(db, month) };
+  });
+
+  /** After paying a winner by hand: `{ month, playerId }`. */
+  app.post('/internal/monthly-prizes/paid', async (req) => {
+    requireInternal(req);
+    const b = body(req);
+    const month = seasonById(b.month);
+    if (!month || typeof b.playerId !== 'string') throw new ApiError(400, 'bad_request', 'Send { month: "YYYY-MM", playerId }');
+    await markPrizePaid(db, month, b.playerId);
+    return { ok: true };
   });
 
   app.post('/internal/match-results', async (req) => {

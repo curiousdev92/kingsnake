@@ -1,6 +1,7 @@
 import type { Vec2 } from '@snake/game-core';
 import { getSkin } from '@snake/meta';
 import { Application, Container, Graphics } from 'pixi.js';
+import { sfx } from '../sound';
 import { Effects } from './Effects';
 import { loadSkinTextures, SEGMENT_PX, type SkinTextures } from './skinTextures';
 import { makeRoundTextures, SpritePool } from './SpritePool';
@@ -83,6 +84,7 @@ export class Renderer {
   private readonly snakes = new SpritePool(this.textures.body);
   private readonly effects = new Effects(this.textures.disc);
   private camera: Vec2 = { x: 0, y: 0 };
+  private focusBoosting = false;
   private paints = new Map<number, Paint>();
   /** Loaded skin art by skin id. Skins load in the background and draw as circles until ready. */
   private readonly art = new Map<string, SkinTextures>();
@@ -135,6 +137,10 @@ export class Renderer {
     if (focus?.alive && focusPrev) {
       this.camera = { x: lerp(focusPrev.head.x, focus.head.x, alpha), y: lerp(focusPrev.head.y, focus.head.y, alpha) };
     }
+    // A whoosh each time the focused snake starts boosting.
+    const boosting = !!(focus?.alive && focus.boosting);
+    if (boosting && !this.focusBoosting) sfx('boost');
+    this.focusBoosting = boosting;
     const { width, height } = this.app.screen;
     // Fit more of the arena on small screens.
     const screenScale = Math.min(1, Math.min(width, height) / 700);
@@ -186,7 +192,11 @@ export class Renderer {
       const alive = new Set<number>();
       for (const s of cur.snakes) if (s.alive) alive.add(s.id);
       for (const [id, last] of this.lastSnakes) {
-        if (!alive.has(id)) this.effects.death(last.segments, last.radius, last.colors);
+        if (alive.has(id)) continue;
+        this.effects.death(last.segments, last.radius, last.colors);
+        // Someone else dying close enough to be on screen (your own death has its own sound).
+        const head = last.segments[0];
+        if (id !== focusId && head && Math.hypot(head.x - this.camera.x, head.y - this.camera.y) < 900) sfx('pop');
       }
     }
 
@@ -202,6 +212,7 @@ export class Renderer {
           const reach = s.radius * 3 + 16;
           if ((s.head.x - p.x) ** 2 + (s.head.y - p.y) ** 2 < reach * reach) {
             this.effects.eat(p, s.head, this.paintOf(s.id, focusId).colors[0]!);
+            if (s.id === focusId) sfx('eat');
             break;
           }
         }

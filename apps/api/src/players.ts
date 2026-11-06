@@ -24,6 +24,7 @@ import {
 import type { Db } from './db';
 import { ApiError } from './errors';
 import { hashPassword, verifyPassword } from './passwords';
+import { pendingMonthlyPrize } from './prizes';
 import { lockSeasonRating, pendingSeasonReward, recordSeasonResult, seasonRating, standing } from './seasons';
 
 export { ApiError };
@@ -71,7 +72,7 @@ async function playerStats(db: Db, id: string): Promise<PlayerStats> {
   return { matches: row?.matches ?? 0, wins: row?.wins ?? 0, kills: row?.kills ?? 0, bestPlacement: row?.best ?? null, survivalMs: row?.survival ?? 0 };
 }
 
-function toProfile(row: PlayerRow, owned: string[], stats: PlayerStats, now: Date, ranked: Pick<Profile, 'season' | 'seasonReward'>): Profile {
+function toProfile(row: PlayerRow, owned: string[], stats: PlayerStats, now: Date, ranked: Pick<Profile, 'season' | 'seasonReward' | 'monthlyPrize'>): Profile {
   const next = nextStreak(row.daily_last_claim, row.daily_streak, utcDay(now));
   return {
     id: row.id,
@@ -100,6 +101,7 @@ export async function getProfile(db: Db, id: string, now: Date): Promise<Profile
   return toProfile(row, await ownedItems(db, id), await playerStats(db, id), now, {
     season: await standing(db, season, id),
     seasonReward: await pendingSeasonReward(db, season, id),
+    monthlyPrize: await pendingMonthlyPrize(db, season, id),
   });
 }
 
@@ -186,6 +188,7 @@ export async function claimDaily(db: Db, id: string, now: Date): Promise<number>
 export async function buy(db: Db, id: string, itemId: unknown): Promise<void> {
   const skin = typeof itemId === 'string' ? getSkin(itemId) : undefined;
   if (!skin) throw new ApiError(404, 'item_not_found', 'No such item');
+  if (skin.exclusive) throw new ApiError(403, 'not_for_sale', `${skin.name} is a reward and cannot be bought`);
   if (skin.price === 0) throw new ApiError(409, 'already_owned', 'Already owned');
   await db.transaction(async (tx) => {
     const row = await requireRow(tx, id, true);
@@ -234,8 +237,8 @@ export async function recordMatch(db: Db, report: MatchReport, now: Date): Promi
       // Lower placement wins; equal placements (both died on the same tick) draw.
       const scoreA = a.placement < b.placement ? 1 : a.placement > b.placement ? 0 : 0.5;
       const deltaA = ratingDelta(ratingA, ratingB, scoreA);
-      grants[a.playerId] = await recordResult(tx, report, a, rowA, { season, rating: ratingA, delta: deltaA, score: scoreA });
-      grants[b.playerId] = await recordResult(tx, report, b, rowB, { season, rating: ratingB, delta: -deltaA, score: 1 - scoreA });
+      grants[a.playerId] = await recordResult(tx, report, a, rowA, { season, rating: ratingA, delta: deltaA, score: scoreA }, now);
+      grants[b.playerId] = await recordResult(tx, report, b, rowB, { season, rating: ratingB, delta: -deltaA, score: 1 - scoreA }, now);
       return true;
     });
     if (rated) return grants;
@@ -243,7 +246,7 @@ export async function recordMatch(db: Db, report: MatchReport, now: Date): Promi
   for (const r of report.results) {
     await db.transaction(async (tx) => {
       const row = await loadRow(tx, r.playerId, true);
-      if (row) grants[r.playerId] = await recordResult(tx, report, r, row, null);
+      if (row) grants[r.playerId] = await recordResult(tx, report, r, row, null, now);
     });
   }
   return grants;
@@ -258,13 +261,13 @@ interface RankedResult {
 }
 
 /** One player's result inside a transaction holding their row locks. */
-async function recordResult(tx: Db, report: MatchReport, r: MatchResultEntry, row: PlayerRow, ranked: RankedResult | null): Promise<Grant> {
+async function recordResult(tx: Db, report: MatchReport, r: MatchResultEntry, row: PlayerRow, ranked: RankedResult | null, now: Date): Promise<Grant> {
   const reward = matchReward({ placement: r.placement, totalPlayers: report.totalPlayers, kills: r.kills, survivalMs: r.survivalMs });
   const after = ranked && applyRating(ranked.rating, ranked.delta);
   const inserted = await tx.query<{ xp: number }>(
-    `INSERT INTO match_results (match_id, player_id, placement, total_players, kills, survival_ms, xp, coins, rating_delta)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT DO NOTHING RETURNING xp`,
-    [report.matchId, r.playerId, r.placement, report.totalPlayers, Math.max(0, Math.floor(r.kills)), Math.max(0, Math.floor(r.survivalMs)), reward.xp, reward.coins, ranked ? after! - ranked.rating : null],
+    `INSERT INTO match_results (match_id, player_id, placement, total_players, kills, survival_ms, xp, coins, rating_delta, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::timestamptz) ON CONFLICT DO NOTHING RETURNING xp`,
+    [report.matchId, r.playerId, r.placement, report.totalPlayers, Math.max(0, Math.floor(r.kills)), Math.max(0, Math.floor(r.survivalMs)), reward.xp, reward.coins, ranked ? after! - ranked.rating : null, now.toISOString()],
   );
   const level = levelFromXp(row.xp).level;
   if (inserted.length === 0) {

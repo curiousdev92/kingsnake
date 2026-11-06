@@ -1,5 +1,6 @@
-import type { Leaderboard, Profile } from '@snake/meta';
+import type { Leaderboard, Profile, ScoreBoard, ScoreBoardKind } from '@snake/meta';
 import { create } from 'zustand';
+import { sfx } from './sound';
 
 /**
  * The player's account: a guest session against the meta API, created on first
@@ -139,13 +140,21 @@ export async function rename(name: string): Promise<void> {
 export async function claimDaily(): Promise<number> {
   const res = await call<{ coins: number; profile: Profile }>('POST', '/me/daily');
   setProfile(res.profile);
+  sfx('coin');
   return res.coins;
 }
 
 export async function claimSeasonReward(): Promise<number> {
   const res = await call<{ coins: number; profile: Profile }>('POST', '/me/season-reward');
   setProfile(res.profile);
+  sfx('reward');
   return res.coins;
+}
+
+/** Cash prize winners leave payout details; the owner pays by hand. Needs a registered account. */
+export async function claimMonthlyPrize(details: string): Promise<void> {
+  setProfile(await call<Profile>('POST', '/me/monthly-prize', { details }));
+  sfx('reward');
 }
 
 /** A season's leaderboard (default: the current one); includes your own line when signed in. */
@@ -153,10 +162,17 @@ export function fetchLeaderboard(seasonId?: string): Promise<Leaderboard> {
   return call<Leaderboard>('GET', seasonId ? `/leaderboard?season=${encodeURIComponent(seasonId)}` : '/leaderboard');
 }
 
+/** The all-time or current-month XP board (every mode); includes your own line when signed in. */
+export function fetchScoreBoard(kind: ScoreBoardKind): Promise<ScoreBoard> {
+  return call<ScoreBoard>('GET', `/leaderboard/${kind}`);
+}
+
 export async function buySkin(itemId: string): Promise<void> {
   setProfile(await call<Profile>('POST', '/shop/buy', { itemId }));
+  sfx('purchase');
 }
 
 export async function equipSkin(itemId: string): Promise<void> {
   setProfile(await call<Profile>('POST', '/me/equip', { itemId }));
+  sfx('equip');
 }
