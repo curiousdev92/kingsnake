@@ -68,13 +68,15 @@ export function fillPellets(state: GameState, cfg: SimConfig, maxSpawns: number)
 export function cloneState(s: GameState): GameState {
   return {
     ...s,
+    // Points and pellets are never mutated in place: step replaces heads and segment arrays
+    // and only pushes/splices paths. So copying the arrays (or sharing segments) is enough;
+    // deep-copying every point each tick was costly and caused GC pauses.
     snakes: s.snakes.map((sn) => ({
       ...sn,
       head: { ...sn.head },
-      path: sn.path.map((p) => ({ x: p.x, y: p.y })),
-      segments: sn.segments.map((p) => ({ x: p.x, y: p.y })),
+      path: sn.path.slice(),
     })),
-    pellets: s.pellets.map((p) => ({ ...p })),
+    pellets: s.pellets.slice(),
     arena: { ...s.arena, center: { ...s.arena.center } },
     events: [],
   };

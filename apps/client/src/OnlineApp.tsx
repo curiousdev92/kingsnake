@@ -1,17 +1,13 @@
-import type { LobbyInfo } from "@snake/protocol";
-import { getMode } from "@snake/game-modes";
 import { token } from "@snake/design-tokens";
+import { getMode } from "@snake/game-modes";
+import type { LobbyInfo } from "@snake/protocol";
 import { Button, Panel } from "@snake/ui-kit";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { create } from "zustand";
 import { refreshProfile, savedName, sessionToken, useAccount } from "./account";
-import { Home, normalizeCode } from "./Home";
-import {
-  OnlineGame,
-  type JoinRequest,
-  type OnlineStats,
-} from "./game/OnlineGame";
+import { OnlineGame, type JoinRequest, type OnlineStats } from "./game/OnlineGame";
 import { Renderer } from "./game/Renderer";
+import { Home, normalizeCode } from "./Home";
 
 const useOnline = create<OnlineStats | null>(() => null);
 
@@ -23,8 +19,12 @@ const serverUrl = (): string | null => {
   if (configured) return configured;
 
   // The local dev server is available on port 2567; Vercel cannot expose a
-  // second long-lived WebSocket process behind the frontend hostname.
-  if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+  // In dev, use the page's host so other devices on the LAN reach it too.
+  if (
+    import.meta.env.DEV ||
+    location.hostname === "localhost" ||
+    location.hostname === "127.0.0.1"
+  ) {
     return `ws://${location.hostname}:2567`;
   }
 
@@ -53,9 +53,7 @@ function inviteLink(code: string): string {
  * `?room=CODE` (an invite link) joins a private room directly; `?server=` overrides the URL.
  */
 export function OnlineApp() {
-  const [fallbackName] = useState(
-    () => `Player${Math.floor(Math.random() * 900 + 100)}`,
-  );
+  const [fallbackName] = useState(() => `Player${Math.floor(Math.random() * 900 + 100)}`);
   const [join, setJoin] = useState<JoinRequest | null>(() => {
     const code = codeFromUrl();
     return code ? { kind: "code", code } : null;
@@ -101,7 +99,7 @@ function GameView({
     renderer.init(host.current!).then(() => {
       if (cancelled) return renderer.app.destroy(true);
       g = new OnlineGame(renderer, (s) => useOnline.setState(s, true), {
-        url, 
+        url,
         name,
         join,
         token: useAccount.getState().status === "ready" ? sessionToken() : null,
@@ -132,8 +130,8 @@ function GameView({
         <Panel style={{ maxWidth: 520, display: "grid", gap: token("space.md") }}>
           <strong>Online play is unavailable</strong>
           <p style={{ margin: 0, color: token("color.textMuted") }}>
-            The web client is running, but its game server has not been configured
-            for this deployment yet.
+            The web client is running, but its game server has not been configured for this
+            deployment yet.
           </p>
           <Button variant="secondary" onClick={onLeave}>
             Back to menu
@@ -222,13 +220,7 @@ const muted = {
   marginTop: token("space.sm"),
 } as const;
 
-function PhaseOverlay({
-  game,
-  onLeave,
-}: {
-  game: OnlineGame | null;
-  onLeave: () => void;
-}) {
+function PhaseOverlay({ game, onLeave }: { game: OnlineGame | null; onLeave: () => void }) {
   const s = useOnline();
   if (!s || s.connection === "connecting") {
     return (
@@ -244,9 +236,7 @@ function PhaseOverlay({
         {s.queue && (
           <div style={muted}>
             Your rating {s.queue.rating} · {s.queue.seconds}s
-            {s.queue.seconds >= 10 && (
-              <div>Widening the search to more ratings</div>
-            )}
+            {s.queue.seconds >= 10 && <div>Widening the search to more ratings</div>}
           </div>
         )}
         <div style={{ marginTop: token("space.lg") }}>
@@ -271,8 +261,7 @@ function PhaseOverlay({
   const lobby = s.lobby;
   switch (s.phase) {
     case "waiting":
-      if (lobby?.private && game)
-        return <PrivateLobby game={game} lobby={lobby} />;
+      if (lobby?.private && game) return <PrivateLobby game={game} lobby={lobby} />;
       return (
         <Center>
           <div style={title}>Finding players…</div>
@@ -282,13 +271,10 @@ function PhaseOverlay({
       return (
         <Center>
           <div style={muted}>Match starts in</div>
-          <div style={{ ...title, fontSize: 64 }}>
-            {s.phaseSecondsLeft ?? ""}
-          </div>
+          <div style={{ ...title, fontSize: 64 }}>{s.phaseSecondsLeft ?? ""}</div>
           {lobby && (
             <div style={muted}>
-              {lobby.players.length}{" "}
-              {lobby.players.length === 1 ? "player" : "players"}
+              {lobby.players.length} {lobby.players.length === 1 ? "player" : "players"}
               {lobby.bots > 0 && ` + ${lobby.bots} bots`}
               {!lobby.private && lobby.players.length < lobby.maxPlayers && (
                 <> · waiting for more players</>
@@ -300,9 +286,7 @@ function PhaseOverlay({
     case "ended":
       return (
         <Center>
-          <div style={title}>
-            {s.winnerName ? `${s.winnerName} wins!` : "Draw"}
-          </div>
+          <div style={title}>{s.winnerName ? `${s.winnerName} wins!` : "Draw"}</div>
           {s.rewards && (
             <div
               style={{
@@ -325,14 +309,12 @@ function PhaseOverlay({
             </div>
           )}
           <div style={muted}>
-            {lobby?.private ? "Back to the lobby" : "Next match"} in{" "}
-            {s.phaseSecondsLeft ?? 0}s
+            {lobby?.private ? "Back to the lobby" : "Next match"} in {s.phaseSecondsLeft ?? 0}s
           </div>
         </Center>
       );
     case "playing":
-      if (s.you === null)
-        return <Banner>Spectating: you will join the next match</Banner>;
+      if (s.you === null) return <Banner>Spectating: you will join the next match</Banner>;
       if (!s.youAlive && s.placement > 0) {
         return (
           <Banner>
@@ -364,9 +346,7 @@ function PrivateLobby({ game, lobby }: { game: OnlineGame; lobby: LobbyInfo }) {
 
   return (
     <Center>
-      <div style={{ color: token("color.textMuted") }}>
-        Private room code · {mode.name}
-      </div>
+      <div style={{ color: token("color.textMuted") }}>Private room code · {mode.name}</div>
       <div
         style={{
           ...title,
@@ -405,12 +385,8 @@ function PrivateLobby({ game, lobby }: { game: OnlineGame; lobby: LobbyInfo }) {
             style={{ padding: `${token("space.xs")} ${token("space.md")}` }}
           >
             {p.name}
-            {p.host && (
-              <span style={{ color: token("color.textMuted") }}> · host</span>
-            )}
-            {p.you && (
-              <span style={{ color: token("color.textMuted") }}> · you</span>
-            )}
+            {p.host && <span style={{ color: token("color.textMuted") }}> · host</span>}
+            {p.you && <span style={{ color: token("color.textMuted") }}> · you</span>}
           </Panel>
         ))}
       </div>
@@ -465,9 +441,7 @@ function Banner({ children }: { children: ReactNode }) {
         pointerEvents: "none",
       }}
     >
-      <Panel style={{ padding: `${token("space.sm")} ${token("space.lg")}` }}>
-        {children}
-      </Panel>
+      <Panel style={{ padding: `${token("space.sm")} ${token("space.lg")}` }}>{children}</Panel>
     </div>
   );
 }
@@ -491,13 +465,7 @@ type KnobKey = (typeof KNOBS)[number]["key"];
 const DEV_TOOLS = import.meta.env.DEV;
 
 /** The Leave button, plus (dev builds only) network simulator, prediction and interpolation controls. */
-function NetPanel({
-  game,
-  onLeave,
-}: {
-  game: OnlineGame;
-  onLeave: () => void;
-}) {
+function NetPanel({ game, onLeave }: { game: OnlineGame; onLeave: () => void }) {
   const s = useOnline();
   const [open, setOpen] = useState(false);
   const [v, setV] = useState<Record<KnobKey, number>>({
@@ -518,17 +486,9 @@ function NetPanel({
     game.predictor.smoothingMs = next.smoothing;
   };
 
-  const toggle = (
-    label: string,
-    checked: boolean,
-    set: (on: boolean) => void,
-  ) => (
+  const toggle = (label: string, checked: boolean, set: (on: boolean) => void) => (
     <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => set(e.target.checked)}
-      />
+      <input type="checkbox" checked={checked} onChange={(e) => set(e.target.checked)} />
       {label}
     </label>
   );
@@ -545,11 +505,7 @@ function NetPanel({
       }}
     >
       <div style={{ display: "flex", gap: 8 }}>
-        <Button
-          variant="secondary"
-          onClick={onLeave}
-          style={{ fontSize: token("font.sizeSm") }}
-        >
+        <Button variant="secondary" onClick={onLeave} style={{ fontSize: token("font.sizeSm") }}>
           Leave
         </Button>
         {DEV_TOOLS && (
@@ -609,9 +565,7 @@ function NetPanel({
               {s.kbpsDown} kbps down · buffer {s.buffered}
               <br />
               interp {s.interpMs} ms{autoInterp ? " (auto)" : ""}
-              {s.extrapolating && (
-                <b style={{ color: token("color.text") }}> · extrapolating</b>
-              )}
+              {s.extrapolating && <b style={{ color: token("color.text") }}> · extrapolating</b>}
               <br />
               {s.predErr === null
                 ? "prediction off"

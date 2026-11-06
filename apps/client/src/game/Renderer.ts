@@ -2,6 +2,7 @@ import type { Vec2 } from '@snake/game-core';
 import { getSkin } from '@snake/meta';
 import { Application, Container, Graphics } from 'pixi.js';
 import { Effects } from './Effects';
+import { makeRoundTextures, SpritePool } from './SpritePool';
 
 /** A skin's palette as Pixi colours, banded along the body. */
 interface Paint {
@@ -17,11 +18,12 @@ const COLORS = {
   pellet: 0xffffff,
   player: 0xffffff,
   bot: 0xb5b5b5,
-  outline: 0x000000,
   eye: 0x000000,
 };
 const GRID = 64;
 const GRID_EXTENT = 4000;
+/** World units drawn beyond the screen edge, so nothing pops in at the border. */
+const CULL_MARGIN = 40;
 
 /** What the renderer needs from a snake. Satisfied by game-core's Snake and netcode's ViewSnake. */
 export interface RenderSnake {
@@ -35,29 +37,50 @@ export interface RenderSnake {
   segments: Vec2[];
 }
 
+export interface RenderPellet {
+  id: number;
+  x: number;
+  y: number;
+  value: number;
+}
+
 /** One moment of the world. Satisfied by game-core's GameState and by netcode views plus pellets. */
 export interface RenderWorld {
   snakes: readonly RenderSnake[];
-  pellets: readonly { x: number; y: number; value: number }[];
+  pellets: readonly RenderPellet[];
   arena: { center: Vec2; radius: number; targetRadius: number };
+}
+
+interface Bounds {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
 }
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
+/**
+ * Draws the world with pooled sprites of pre-drawn circles (one batch per layer) and
+ * skips everything outside the view, so cost follows what is on screen rather than
+ * total snake length or pellet count.
+ */
 export class Renderer {
   readonly app = new Application();
   private readonly world = new Container();
   private readonly grid = new Graphics();
   private readonly arena = new Graphics();
-  private readonly pellets = new Graphics();
-  private readonly snakes = new Graphics();
+  private readonly textures = makeRoundTextures();
+  private readonly pellets = new SpritePool(this.textures.disc);
+  private readonly snakes = new SpritePool(this.textures.body);
+  private readonly effects = new Effects(this.textures.disc);
   private zoom = 1;
   private camera: Vec2 = { x: 0, y: 0 };
   private paints = new Map<number, Paint>();
-  private readonly effects = new Effects();
-  // Last frame's living snakes and pellets, diffed each frame to spawn death and eat effects.
+  private arenaDrawn = { radius: -1, target: -1 };
+  // Last frame's living snakes and pellets, diffed to spawn death and eat effects.
   private lastSnakes = new Map<number, { segments: Vec2[]; radius: number; colors: number[] }>();
-  private lastPellets = new Map<string, { x: number; y: number }>();
+  private lastPellets: readonly RenderPellet[] = [];
 
   /** Skin per snake id. Snakes without one are white when focused, grey otherwise. */
   setSkins(skins: ReadonlyMap<number, string>): void {
@@ -77,7 +100,7 @@ export class Renderer {
       autoDensity: true,
     });
     host.appendChild(this.app.canvas);
-    this.world.addChild(this.grid, this.pellets, this.snakes, this.effects.gfx, this.arena);
+    this.world.addChild(this.grid, this.pellets.container, this.snakes.container, this.effects.container, this.arena);
     this.app.stage.addChild(this.world);
     this.drawGrid();
   }
@@ -88,7 +111,8 @@ export class Renderer {
 
   /** Draws the world between two sim states; `alpha` in [0, 1) is progress from prev to cur. */
   render(prev: RenderWorld, cur: RenderWorld, alpha: number, focusId: number | null): void {
-    const prevById = new Map(prev.snakes.map((s) => [s.id, s]));
+    const prevById = new Map<number, RenderSnake>();
+    for (const s of prev.snakes) prevById.set(s.id, s);
     const focus = cur.snakes.find((s) => s.id === focusId);
     const focusPrev = focusId === null ? undefined : prevById.get(focusId);
 
@@ -104,17 +128,22 @@ export class Renderer {
     const z = this.zoom * screenScale;
     this.world.scale.set(z);
     this.world.position.set(width / 2 - this.camera.x * z, height / 2 - this.camera.y * z);
+    const hw = width / 2 / z + CULL_MARGIN;
+    const hh = height / 2 / z + CULL_MARGIN;
+    const view: Bounds = { x0: this.camera.x - hw, y0: this.camera.y - hh, x1: this.camera.x + hw, y1: this.camera.y + hh };
 
     this.drawArena(lerp(prev.arena.radius, cur.arena.radius, alpha), cur);
-    this.drawPellets(cur);
+    this.drawPellets(cur, view);
 
-    const g = this.snakes.clear();
+    const pool = this.snakes;
+    pool.begin();
     // Draw the focused snake last so it is always on top.
-    const ordered = [...cur.snakes].sort((a, b) => Number(a.id === focusId) - Number(b.id === focusId));
-    for (const s of ordered) {
-      if (!s.alive) continue;
-      this.drawSnake(g, prevById.get(s.id) ?? s, s, alpha, this.paintOf(s.id, focusId));
+    for (const s of cur.snakes) {
+      if (s.alive && s.id !== focusId) this.drawSnake(prevById.get(s.id) ?? s, s, alpha, this.paintOf(s.id, focusId), view);
     }
+    if (focus?.alive) this.drawSnake(focusPrev ?? focus, focus, alpha, this.paintOf(focus.id, focusId), view);
+    pool.end();
+
     this.spawnEffects(cur, focusId);
     this.effects.update(Math.min(this.app.ticker.deltaMS / 1000, 0.1));
   }
@@ -122,11 +151,12 @@ export class Renderer {
   /** Clears the world (between matches) but keeps the grid. */
   clear(): void {
     this.arena.clear();
+    this.arenaDrawn = { radius: -1, target: -1 };
     this.pellets.clear();
     this.snakes.clear();
     this.effects.clear();
     this.lastSnakes.clear();
-    this.lastPellets.clear();
+    this.lastPellets = [];
   }
 
   private paintOf(id: number, focusId: number | null): Paint {
@@ -134,33 +164,43 @@ export class Renderer {
   }
 
   private spawnEffects(cur: RenderWorld, focusId: number | null): void {
-    const living = cur.snakes.filter((s) => s.alive);
-    const alive = new Set(living.map((s) => s.id));
-    for (const [id, last] of this.lastSnakes) {
-      if (!alive.has(id)) this.effects.death(last.segments, last.radius, last.colors);
-    }
-
-    // A pellet that vanished right next to a head was eaten by that snake.
-    const pellets = new Map(cur.pellets.map((p) => [`${p.x},${p.y}`, p]));
-    for (const [key, p] of this.lastPellets) {
-      if (pellets.has(key)) continue;
-      for (const s of living) {
-        const reach = s.radius * 3 + 16;
-        if ((s.head.x - p.x) ** 2 + (s.head.y - p.y) ** 2 < reach * reach) {
-          this.effects.eat(p, s.head, this.paintOf(s.id, focusId).colors[0]!);
-          break;
-        }
+    let living = 0;
+    for (const s of cur.snakes) if (s.alive) living++;
+    if (living < this.lastSnakes.size) {
+      const alive = new Set<number>();
+      for (const s of cur.snakes) if (s.alive) alive.add(s.id);
+      for (const [id, last] of this.lastSnakes) {
+        if (!alive.has(id)) this.effects.death(last.segments, last.radius, last.colors);
       }
     }
 
-    this.lastSnakes = new Map();
-    for (const s of living) {
+    // Pellets only change when the sim steps or events land, not every frame.
+    if (cur.pellets !== this.lastPellets) {
+      // A pellet that vanished right next to a head was eaten by that snake.
+      const ids = new Set<number>();
+      for (const p of cur.pellets) ids.add(p.id);
+      for (const p of this.lastPellets) {
+        if (ids.has(p.id)) continue;
+        for (const s of cur.snakes) {
+          if (!s.alive) continue;
+          const reach = s.radius * 3 + 16;
+          if ((s.head.x - p.x) ** 2 + (s.head.y - p.y) ** 2 < reach * reach) {
+            this.effects.eat(p, s.head, this.paintOf(s.id, focusId).colors[0]!);
+            break;
+          }
+        }
+      }
+      this.lastPellets = cur.pellets;
+    }
+
+    this.lastSnakes.clear();
+    for (const s of cur.snakes) {
+      if (!s.alive) continue;
       const colors = this.paintOf(s.id, focusId).colors;
       this.lastSnakes.set(s.id, { segments: s.segments, radius: s.radius, colors });
       const tail = s.segments[s.segments.length - 1];
       if (s.boosting && tail && Math.random() < 0.6) this.effects.boostTrail(tail, s.angle, colors[0]!);
     }
-    this.lastPellets = pellets;
   }
 
   private drawGrid(): void {
@@ -173,6 +213,10 @@ export class Renderer {
   }
 
   private drawArena(radius: number, s: RenderWorld): void {
+    // Rebuilding this geometry is costly, so only redraw when the edge has visibly moved.
+    const drawn = this.arenaDrawn;
+    if (Math.abs(drawn.radius - radius) < 0.25 && drawn.target === s.arena.targetRadius) return;
+    this.arenaDrawn = { radius, target: s.arena.targetRadius };
     const { x, y } = s.arena.center;
     const g = this.arena.clear();
     // Storm: everything outside the circle is hatched over.
@@ -184,46 +228,64 @@ export class Renderer {
     }
   }
 
-  private drawPellets(s: RenderWorld): void {
-    const g = this.pellets.clear();
+  private drawPellets(s: RenderWorld, v: Bounds): void {
+    const pool = this.pellets;
+    pool.begin();
     for (const p of s.pellets) {
-      g.circle(p.x, p.y, Math.min(14, 3 + Math.sqrt(p.value) * 2));
+      if (p.x < v.x0 || p.x > v.x1 || p.y < v.y0 || p.y > v.y1) continue;
+      pool.place(p.x, p.y, Math.min(14, 3 + Math.sqrt(p.value) * 2), COLORS.pellet, 0.85);
     }
-    g.fill({ color: COLORS.pellet, alpha: 0.85 });
+    pool.end();
   }
 
-  private drawSnake(g: Graphics, prev: RenderSnake, cur: RenderSnake, alpha: number, paint: Paint): void {
+  private drawSnake(prev: RenderSnake, cur: RenderSnake, alpha: number, paint: Paint, v: Bounds): void {
     const { colors, band } = paint;
     const color = colors[0]!;
+    const pool = this.snakes;
+    const disc = this.textures.disc;
     const r = lerp(prev.radius, cur.radius, alpha);
     const segs = cur.segments;
-    // Segment k sits at the same distance behind the head in both states, so lerp index-wise.
-    const at = (k: number): Vec2 => {
-      const b = segs[k]!;
-      const a = prev.segments[k] ?? b;
-      return { x: lerp(a.x, b.x, alpha), y: lerp(a.y, b.y, alpha) };
-    };
+    const prevSegs = prev.segments;
+    const glow = r * 1.8;
+    // Segments outside the view (padded by their own size) are skipped.
+    const x0 = v.x0 - glow;
+    const y0 = v.y0 - glow;
+    const x1 = v.x1 + glow;
+    const y1 = v.y1 + glow;
 
+    // Segment k sits at the same distance behind the head in both states, so lerp index-wise.
     if (cur.boosting) {
       for (let k = segs.length - 1; k >= 0; k -= 2) {
-        const p = at(k);
-        g.circle(p.x, p.y, r * 1.8).fill({ color, alpha: 0.14 });
+        const b = segs[k]!;
+        const a = prevSegs[k] ?? b;
+        const x = a.x + (b.x - a.x) * alpha;
+        const y = a.y + (b.y - a.y) * alpha;
+        if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+        pool.place(x, y, glow, color, 0.14, disc);
       }
     }
     for (let k = segs.length - 1; k >= 0; k--) {
-      const p = at(k);
+      const b = segs[k]!;
+      const a = prevSegs[k] ?? b;
+      const x = a.x + (b.x - a.x) * alpha;
+      const y = a.y + (b.y - a.y) * alpha;
+      if (x < x0 || x > x1 || y < y0 || y > y1) continue;
       // Bands are counted from the head, so the pattern stays put on the body as it moves.
-      const c = colors[Math.floor(k / band) % colors.length]!;
-      g.circle(p.x, p.y, r).fill(c).stroke({ width: 1.5, color: COLORS.outline, alpha: 0.6 });
+      pool.place(x, y, r, colors[Math.floor(k / band) % colors.length]!);
     }
 
     // Eyes look along the heading.
-    const head = at(0);
+    const hb = segs[0];
+    if (!hb) return;
+    const ha = prevSegs[0] ?? hb;
+    const hx = lerp(ha.x, hb.x, alpha);
+    const hy = lerp(ha.y, hb.y, alpha);
+    if (hx < x0 || hx > x1 || hy < y0 || hy > y1) return;
     const angle = prev.angle + angleDelta(prev.angle, cur.angle) * alpha;
     for (const side of [-1, 1]) {
-      const ex = head.x + Math.cos(angle + side * 0.6) * r * 0.55;
-      const ey = head.y + Math.sin(angle + side * 0.6) * r * 0.55;
-      g.circle(ex, ey, r * 0.22).fill(COLORS.eye);
+      const ex = hx + Math.cos(angle + side * 0.6) * r * 0.55;
+      const ey = hy + Math.sin(angle + side * 0.6) * r * 0.55;
+      pool.place(ex, ey, r * 0.22, COLORS.eye, 1, disc);
     }
   }
 }
