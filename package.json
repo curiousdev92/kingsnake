@@ -1,0 +1,22 @@
+{
+  "name": "king-snake",
+  "version": "0.1.0",
+  "description": "Online cross-platform multiplayer Snake rival game",
+  "license": "MIT",
+  "author": "curiousdev92",
+  "private": true,
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test"
+  },   
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "turbo": "2.5.4"
+  },
+  "packageManager": "pnpm@12.8.1"
+}
