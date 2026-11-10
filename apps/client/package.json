@@ -1,5 +1,5 @@
 {
-  "name": "client",
+  "name": "@kingsnake/client",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -10,7 +10,6 @@
     "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json"
   },
   "dependencies": {
-    "@repo/ui": "*",
     "types": "*"
   },
   "devDependencies": {
