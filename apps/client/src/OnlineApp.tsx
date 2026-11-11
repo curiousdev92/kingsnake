@@ -18,13 +18,9 @@ const serverUrl = (): string | null => {
   const configured = import.meta.env.VITE_GAME_SERVER_URL?.trim();
   if (configured) return configured;
 
-  // The local dev server is available on port 2567; Vercel cannot expose a
-  // In dev, use the page's host so other devices on the LAN reach it too.
-  if (
-    import.meta.env.DEV ||
-    location.hostname === "localhost" ||
-    location.hostname === "127.0.0.1"
-  ) {
+  // Use the local game server only on local hosts. v0 and Vercel preview
+  // hosts may run in development mode, but do not expose the game-server port.
+  if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
     return `ws://${location.hostname}:2567`;
   }
 
