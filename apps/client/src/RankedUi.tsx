@@ -1,9 +1,10 @@
 import { token } from '@snake/design-tokens';
-import { getSkin, previousSeason, seasonAt, type Leaderboard, type LeaderboardEntry } from '@snake/meta';
+import { MAX_PAYOUT_DETAILS, MONTHLY_PRIZES, SEASON_REWARD_TIERS, getSkin, seasonAt, type Leaderboard, type LeaderboardEntry, type ScoreBoard, type ScoreEntry } from '@snake/meta';
 import { Badge, Button, Modal, Panel, Tabs } from '@snake/ui-kit';
 import { useEffect, useState } from 'react';
-import { ApiFailure, claimSeasonReward, fetchLeaderboard, useAccount } from './account';
-import { SkinSwatch } from './AccountUi';
+import { ApiFailure, claimMonthlyPrize, claimSeasonReward, fetchLeaderboard, fetchScoreBoard, useAccount } from './account';
+import { SkinSwatch, inputStyle } from './AccountUi';
+import { sfx } from './sound';
 
 const small = { fontSize: token('font.sizeSm'), color: token('color.textMuted') } as const;
 
@@ -31,8 +32,68 @@ export function SeasonReward() {
         }}
       >
         {standing.season.name}: {reward.tier} (#{standing.rank}) · claim {reward.coins} coins
+        {reward.skin && ` + ${getSkin(reward.skin)?.name ?? ''} skin`}
       </Button>
     </Badge>
+  );
+}
+
+/** Last month's cash prize (top 3 on the monthly XP board): claim it, then wait for the manual payout. */
+export function MonthlyPrizeCard() {
+  const profile = useAccount((s) => s.profile);
+  const prize = profile?.monthlyPrize ?? null;
+  const [open, setOpen] = useState(false);
+  const [details, setDetails] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!profile || !prize) return null;
+  const what = `${prize.month.name}: #${prize.rank} on the monthly board`;
+  if (prize.status === 'requested') return <div style={small}>{what}. Your ${prize.amountUsd} prize is on its way: we pay it by hand using the details you sent.</div>;
+  if (prize.status === 'paid') return <div style={small}>{what}. Your ${prize.amountUsd} prize has been paid. Congratulations!</div>;
+  return (
+    <>
+      <Badge count>
+        <Button variant="secondary" style={{ width: '100%' }} onClick={() => setOpen(true)}>
+          {what} · claim ${prize.amountUsd}
+        </Button>
+      </Badge>
+      <Modal open={open} onClose={() => setOpen(false)} title={`You won $${prize.amountUsd}`} width={400}>
+        <form
+          style={{ display: 'grid', gap: token('space.md') }}
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setBusy(true);
+            setError(null);
+            try {
+              await claimMonthlyPrize(details);
+              setOpen(false);
+            } catch (err) {
+              sfx('error');
+              setError(err instanceof ApiFailure ? err.message : 'Could not send your claim, try again');
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <div>
+            {what}. Prizes are paid by hand, so tell us how to reach you: a PayPal email or other payout details.
+          </div>
+          {!profile.email && <div style={small}>You are playing as a guest. Sign up from your profile first, then come back to claim.</div>}
+          <input
+            style={inputStyle}
+            aria-label="Payout details"
+            value={details}
+            maxLength={MAX_PAYOUT_DETAILS}
+            placeholder="PayPal email or payout details"
+            onChange={(e) => setDetails(e.target.value)}
+          />
+          {error && <div style={small}>{error}</div>}
+          <Button type="submit" disabled={busy || !profile.email || details.trim().length < 3}>
+            Claim ${prize.amountUsd}
+          </Button>
+        </form>
+      </Modal>
+    </>
   );
 }
 
@@ -52,78 +113,112 @@ function daysLeft(endsAt: string): number {
   return Math.max(0, Math.ceil((Date.parse(endsAt) - Date.now()) / 86_400_000));
 }
 
-function LeaderboardModal({ onClose }: { onClose: () => void }) {
+type BoardTab = 'overall' | 'monthly' | 'duel';
+
+/** A fetched board. Each is the top 50 plus your own line when you are below it. */
+type Loaded = { tab: 'overall' | 'monthly'; board: ScoreBoard } | { tab: 'duel'; board: Leaderboard };
+
+/** Three boards: everyone's XP across all modes (all time, and this month), and this month's ranked 1v1 duels. */
+export function LeaderboardModal({ onClose }: { onClose: () => void }) {
   const current = seasonAt(new Date());
-  const last = previousSeason(current);
-  const [seasonId, setSeasonId] = useState(current.id);
-  const [board, setBoard] = useState<Leaderboard | null>(null);
+  const [tab, setTab] = useState<BoardTab>('overall');
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
-    setBoard(null);
+    setLoaded(null);
     setError(null);
-    fetchLeaderboard(seasonId).then(
-      (b) => live && setBoard(b),
+    const request: Promise<Loaded> =
+      tab === 'duel'
+        ? fetchLeaderboard(current.id).then((board) => ({ tab, board }))
+        : fetchScoreBoard(tab).then((board) => ({ tab, board }));
+    request.then(
+      (l) => live && setLoaded(l),
       (e) => live && setError(e instanceof ApiFailure ? e.message : 'Leaderboard is unavailable right now'),
     );
     return () => {
       live = false;
     };
-  }, [seasonId]);
+  }, [tab, current.id]);
 
-  const youInTop = board?.top.some((e) => e.you) ?? false;
+  const cash = MONTHLY_PRIZES.map((p) => `#${p.rank} $${p.amountUsd}`).join(' · ');
+  const bonuses = SEASON_REWARD_TIERS.map((t) => `${t.name} ${t.minRating}+: ${t.coins} coins${t.skin ? ` + ${getSkin(t.skin)?.name} skin` : ''}`);
+  const note =
+    tab === 'overall'
+      ? 'Every player and mode, all time. Score is the XP your matches earned. No prizes: this one is for bragging rights.'
+      : tab === 'monthly'
+        ? `${current.name}: XP earned in every mode. Resets in ${daysLeft(current.endsAt)} days. Cash prizes for the top 3 when the month ends: ${cash}.`
+        : `${current.name} ranked 1v1 duels. Season ends in ${daysLeft(current.endsAt)} days. Game bonuses by final rating: ${bonuses.join('; ')}.`;
+
   return (
-    <Modal open onClose={onClose} title="Ranked duels" width={440}>
+    <Modal open onClose={onClose} title="Leaderboards" width={440}>
       <div style={{ display: 'grid', gap: token('space.md') }}>
         <Tabs
           items={[
-            { value: current.id, label: current.name },
-            { value: last.id, label: last.name },
+            { value: 'overall', label: 'All time' },
+            { value: 'monthly', label: 'This month' },
+            { value: 'duel', label: '1v1 Duels' },
           ]}
-          value={seasonId}
-          onChange={setSeasonId}
+          value={tab}
+          onChange={(v) => setTab(v as BoardTab)}
         />
-        <div style={small}>
-          {seasonId === current.id
-            ? `Season ends in ${daysLeft(current.endsAt)} days. Final ratings earn coins; next season starts halfway back to 1000.`
-            : 'Final standings.'}
-        </div>
+        <div style={small}>{note}</div>
         {error && <div style={small}>{error}</div>}
-        {!board && !error && <div style={small}>Loading…</div>}
-        {board && board.top.length === 0 && <div style={small}>No ranked duels yet. Be the first!</div>}
-        {board && board.top.length > 0 && (
-          <div style={{ display: 'grid', gap: token('space.xs'), maxHeight: '50vh', overflowY: 'auto' }}>
-            {board.top.map((e) => (
-              <Row key={`${e.rank}-${e.name}-${e.rating}`} entry={e} />
-            ))}
-          </div>
-        )}
-        {board?.you && !youInTop && (
-          <>
-            <div style={{ ...small, textAlign: 'center' }}>…</div>
-            <Row entry={board.you} />
-          </>
-        )}
+        {!loaded && !error && <div style={small}>Loading…</div>}
+        {loaded && loaded.tab === tab && <BoardList loaded={loaded} />}
       </div>
     </Modal>
   );
 }
 
-function Row({ entry }: { entry: LeaderboardEntry }) {
-  const skin = getSkin(entry.skin);
+function BoardList({ loaded }: { loaded: Loaded }) {
+  const duel = loaded.tab === 'duel';
+  const entries: (LeaderboardEntry | ScoreEntry)[] = loaded.board.top;
+  const you = loaded.board.you;
+  const row = (e: LeaderboardEntry | ScoreEntry) =>
+    duel ? <DuelRow entry={e as LeaderboardEntry} /> : <ScoreRow entry={e as ScoreEntry} />;
+
+  if (entries.length === 0) {
+    return <div style={small}>{duel ? 'No ranked duels yet. Be the first!' : 'No matches played yet. Be the first!'}</div>;
+  }
   return (
-    <Panel variant="inset" selected={entry.you} style={{ display: 'flex', alignItems: 'center', gap: token('space.sm'), padding: token('space.sm') }}>
-      <b style={{ width: 32, textAlign: 'right', fontFamily: token('font.display') }}>{entry.rank}</b>
+    <>
+      <div style={{ display: 'grid', gap: token('space.xs'), maxHeight: '50vh', overflowY: 'auto' }}>
+        {entries.map((e) => (
+          <div key={`${e.rank}-${e.name}`}>{row(e)}</div>
+        ))}
+      </div>
+      {you && !entries.some((e) => e.you) && (
+        <>
+          <div style={{ ...small, textAlign: 'center' }}>…</div>
+          {row(you)}
+        </>
+      )}
+    </>
+  );
+}
+
+function RowShell(p: { rank: number; skin: string; name: string; you: boolean; detail: string; value: number }) {
+  const skin = getSkin(p.skin);
+  return (
+    <Panel variant="inset" selected={p.you} style={{ display: 'flex', alignItems: 'center', gap: token('space.sm'), padding: token('space.sm') }}>
+      <b style={{ width: 32, textAlign: 'right', fontFamily: token('font.display') }}>{p.rank}</b>
       {skin && <SkinSwatch skin={skin} size={10} />}
       <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {entry.name}
-        {entry.you && ' (you)'}
+        {p.name}
+        {p.you && ' (you)'}
       </span>
-      <span style={small}>
-        {entry.wins}W {entry.losses}L
-      </span>
-      <b style={{ width: 48, textAlign: 'right' }}>{entry.rating}</b>
+      <span style={small}>{p.detail}</span>
+      <b style={{ width: 56, textAlign: 'right' }}>{p.value}</b>
     </Panel>
   );
+}
+
+function DuelRow({ entry }: { entry: LeaderboardEntry }) {
+  return <RowShell rank={entry.rank} skin={entry.skin} name={entry.name} you={entry.you} detail={`${entry.wins}W ${entry.losses}L`} value={entry.rating} />;
+}
+
+function ScoreRow({ entry }: { entry: ScoreEntry }) {
+  return <RowShell rank={entry.rank} skin={entry.skin} name={entry.name} you={entry.you} detail={`${entry.wins}W ${entry.kills}K`} value={entry.score} />;
 }

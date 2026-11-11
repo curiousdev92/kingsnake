@@ -7,9 +7,10 @@ import {
   type Input,
   type SimConfig,
 } from '@snake/game-core';
-import { DEFAULT_SKIN, SKINS } from '@snake/meta';
+import { DEFAULT_SKIN, PUBLIC_SKINS } from '@snake/meta';
 import { useAccount } from '../account';
 import { haptic } from '../haptics';
+import { sfx } from '../sound';
 import { PlayerInput } from './PlayerInput';
 import { Renderer } from './Renderer';
 
@@ -31,7 +32,7 @@ export interface SandboxStats {
  * rendered at display rate with interpolation between the last two sim states.
  */
 export class Sandbox {
-  readonly cfg: SimConfig = makeConfig();
+  private readonly cfg: Readonly<SimConfig> = makeConfig();
   private prev!: GameState;
   private state!: GameState;
   private acc = 0;
@@ -43,7 +44,7 @@ export class Sandbox {
   constructor(
     private readonly renderer: Renderer,
     private readonly onStats: (s: SandboxStats) => void,
-    public botCount = 7,
+    private readonly botCount: number,
   ) {
     this.player = new PlayerInput(renderer.canvas);
     this.restart();
@@ -57,7 +58,7 @@ export class Sandbox {
     this.player.resetAim(this.state.snakes[0]!.angle);
     // Your equipped skin; bots get random ones.
     const mine = useAccount.getState().profile?.equippedSkin ?? DEFAULT_SKIN;
-    this.renderer.setSkins(new Map(this.state.snakes.map((s) => [s.id, s.id === PLAYER_ID ? mine : SKINS[Math.floor(Math.random() * SKINS.length)]!.id])));
+    this.renderer.setSkins(new Map(this.state.snakes.map((s) => [s.id, s.id === PLAYER_ID ? mine : PUBLIC_SKINS[Math.floor(Math.random() * PUBLIC_SKINS.length)]!.id])));
     this.placement = 0;
     this.acc = 0;
   }
@@ -86,8 +87,14 @@ export class Sandbox {
       else if (e.type === 'death' && e.snakeId === PLAYER_ID) {
         this.placement = this.state.snakes.filter((s) => s.alive).length + 1;
         haptic('death');
-      } else if (e.type === 'death' && e.killerId === PLAYER_ID) haptic('kill');
-      else if (e.type === 'win' && e.snakeId === PLAYER_ID) haptic('win');
+        sfx('death');
+      } else if (e.type === 'death' && e.killerId === PLAYER_ID) {
+        haptic('kill');
+        sfx('kill');
+      } else if (e.type === 'win' && e.snakeId === PLAYER_ID) {
+        haptic('win');
+        sfx('win');
+      }
     }
     this.emitStats();
   }

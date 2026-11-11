@@ -3,7 +3,9 @@ import {
   SpatialHash,
   botInputs,
   createGame,
+  fillPellets,
   createSnake,
+  defaultConfig,
   makeConfig,
   sampleSegments,
   step,
@@ -14,9 +16,27 @@ import {
   type SimConfig,
 } from '../src';
 
-// No pellet respawns and no shrinking unless a test asks for them.
+describe('fixed tuning', () => {
+  it('has the agreed values and cannot be changed', () => {
+    expect(defaultConfig).toMatchObject({
+      baseSpeed: 200,
+      turnRate: 10,
+      boostMultiplier: 2,
+      boostCostPerSecond: 2,
+      segmentSpacing: 9,
+      lengthPerMass: 5,
+    });
+    expect(Object.isFrozen(defaultConfig)).toBe(true);
+    expect(Object.isFrozen(defaultConfig.shrinkSchedule[0])).toBe(true);
+    expect(() => {
+      (defaultConfig as SimConfig).baseSpeed = 999;
+    }).toThrow();
+  });
+});
+
+// No pellet respawns, shrinking or rocks unless a test asks for them.
 const quiet = (o: Partial<SimConfig> = {}) =>
-  makeConfig({ pelletDensity: 0, shrinkSchedule: [], ...o });
+  makeConfig({ pelletDensity: 0, shrinkSchedule: [], obstacleDensity: 0, ...o });
 
 function soloGame(cfg: SimConfig, angle = 0): GameState {
   const s = createGame([{ name: 'p' }], cfg);
@@ -79,17 +99,16 @@ describe('movement', () => {
     const cfg = quiet();
     const s = step(soloGame(cfg), new Map([[1, { targetAngle: Math.PI / 2, boost: false }]]), cfg);
     const sn = s.snakes[0]!;
-    const maxTurn = (cfg.baseTurnRate / (1 + sn.mass / cfg.turnRateMassFalloff)) * cfg.dt;
-    expect(sn.angle).toBeCloseTo(maxTurn);
+    expect(sn.angle).toBeCloseTo(cfg.turnRate * cfg.dt);
   });
 
-  it('bigger snakes turn slower', () => {
+  it('turns at the same rate whatever the mass', () => {
     const cfg = quiet();
     const small = soloGame(cfg);
     const big = soloGame(cfg);
     big.snakes[0]!.mass = 500;
     const input = new Map([[1, { targetAngle: Math.PI / 2, boost: false }]]);
-    expect(step(big, input, cfg).snakes[0]!.angle).toBeLessThan(step(small, input, cfg).snakes[0]!.angle);
+    expect(step(big, input, cfg).snakes[0]!.angle).toBeCloseTo(step(small, input, cfg).snakes[0]!.angle);
   });
 
   it('does not mutate the previous state', () => {
@@ -121,8 +140,11 @@ describe('boost', () => {
   });
 
   it('stops at the minimum boost mass', () => {
-    const cfg = quiet();
-    const s = run(soloGame(cfg), 300, cfg, new Map([[1, { targetAngle: 0, boost: true }]]));
+    // A big arena, so the snake burns down to the minimum before it reaches the edge.
+    const cfg = quiet({ arenaBaseRadius: 10_000 });
+    const seconds = (cfg.startMass - cfg.minBoostMass) / cfg.boostCostPerSecond + 1;
+    const s = run(soloGame(cfg), Math.ceil(seconds / cfg.dt), cfg, new Map([[1, { targetAngle: 0, boost: true }]]));
+    expect(s.snakes[0]!.alive).toBe(true);
     expect(s.snakes[0]!.mass).toBeCloseTo(cfg.minBoostMass, 5);
   });
 });
@@ -219,6 +241,44 @@ describe('arena', () => {
   });
 });
 
+describe('rocks', () => {
+  it('are placed deterministically, clear of spawns, inside the arena', () => {
+    const cfg = makeConfig({ pelletDensity: 0 });
+    const players = Array.from({ length: 6 }, (_, i) => ({ name: `p${i}` }));
+    const a = createGame(players, cfg, 5);
+    const b = createGame(players, cfg, 5);
+    expect(a.obstacles.length).toBeGreaterThan(0);
+    expect(a.obstacles).toEqual(b.obstacles);
+    for (const o of a.obstacles) {
+      expect(Math.hypot(o.x, o.y) + o.radius).toBeLessThanOrEqual(a.arena.radius);
+      for (const s of a.snakes) expect(Math.hypot(s.head.x - o.x, s.head.y - o.y)).toBeGreaterThan(o.radius + s.radius);
+    }
+  });
+
+  it('kill a head that touches them, and spare a snake that misses', () => {
+    const cfg = quiet();
+    const hit = soloGame(cfg);
+    hit.obstacles = [{ x: 30, y: 0, radius: 20 }];
+    const s = run(hit, 1, cfg); // events only hold the latest step
+    expect(s.snakes[0]!.alive).toBe(false);
+    expect(s.events).toContainEqual({ type: 'death', snakeId: 1, killerId: null, cause: 'rock' });
+
+    const miss = soloGame(cfg);
+    miss.obstacles = [{ x: 30, y: 200, radius: 20 }];
+    expect(run(miss, 2, cfg).snakes[0]!.alive).toBe(true);
+  });
+
+  it('no pellets spawn inside a rock', () => {
+    const cfg = makeConfig({ pelletDensity: 50, obstacleDensity: 0 });
+    const s = createGame([{ name: 'a' }], cfg);
+    s.obstacles = [{ x: 0, y: 0, radius: 300 }];
+    s.pellets = [];
+    fillPellets(s, cfg, Infinity);
+    expect(s.pellets.length).toBeGreaterThan(0);
+    for (const p of s.pellets) expect(Math.hypot(p.x, p.y)).toBeGreaterThan(300);
+  });
+});
+
 describe('determinism and bots', () => {
   function playBots(seed: number, ticks: number, cfg: SimConfig): GameState {
     const players = Array.from({ length: 8 }, (_, i) => ({ name: `bot${i}`, isBot: true }));
@@ -235,7 +295,7 @@ describe('determinism and bots', () => {
   });
 
   it('a lone bot survives and eats without hitting the edge', () => {
-    const cfg = makeConfig({ shrinkSchedule: [] });
+    const cfg = makeConfig();
     let s = createGame([{ name: 'bot', isBot: true }], cfg);
     for (let i = 0; i < 30 * 60; i++) s = step(s, botInputs(s, cfg), cfg);
     expect(s.snakes[0]!.alive).toBe(true);
@@ -243,7 +303,14 @@ describe('determinism and bots', () => {
   });
 
   it('a full bot match ends with a winner as the arena shrinks', () => {
-    const cfg = makeConfig();
+    const cfg = makeConfig({
+      shrinkSchedule: [
+        { atSecond: 30, radiusFactor: 0.75 },
+        { atSecond: 75, radiusFactor: 0.5 },
+        { atSecond: 120, radiusFactor: 0.3 },
+        { atSecond: 165, radiusFactor: 0.15 },
+      ],
+    });
     const s = playBots(3, 30 * 240, cfg);
     expect(s.finished).toBe(true);
   }, 30_000); // simulates up to 4 minutes of an 8-bot match

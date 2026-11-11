@@ -77,6 +77,7 @@ export async function pendingSeasonReward(db: Db, current: Season, playerId: str
     standing: { season: last, rating: row.rating, wins: row.wins, losses: row.losses, draws: row.draws, rank: await rankOf(db, last, row.rating) },
     tier: tier.name,
     coins: tier.coins,
+    skin: tier.skin ?? null,
   };
 }
 
@@ -86,9 +87,10 @@ export async function claimSeasonReward(db: Db, current: Season, playerId: strin
     const last = previousSeason(current);
     const row = await seasonRow(tx, last, playerId, true);
     if (!row || row.reward_claimed) throw new ApiError(409, 'nothing_to_claim', 'No season reward to claim');
-    const { coins } = seasonTier(row.rating);
+    const { coins, skin } = seasonTier(row.rating);
     await tx.query('UPDATE season_ratings SET reward_claimed = true WHERE season_id = $1 AND player_id = $2', [last.id, playerId]);
     await tx.query('UPDATE players SET coins = coins + $2 WHERE id = $1', [playerId, coins]);
+    if (skin) await tx.query('INSERT INTO owned_items (player_id, item_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [playerId, skin]);
     return coins;
   });
 }

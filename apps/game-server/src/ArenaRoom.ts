@@ -2,7 +2,7 @@ import { Room, type Client } from '@colyseus/core';
 import { verifyPlayerToken } from '@snake/auth';
 import type { SimConfig } from '@snake/game-core';
 import { DEFAULT_MODE, ffa, modeConfig, modeForRoom, queueRoomName, type GameMode } from '@snake/game-modes';
-import { DEFAULT_SKIN, SKINS, sanitizeName, type MatchReport } from '@snake/meta';
+import { DEFAULT_SKIN, PUBLIC_SKINS, sanitizeName, type MatchReport } from '@snake/meta';
 import {
   MATCH_MESSAGE,
   MAX_SNAKES,
@@ -70,7 +70,7 @@ const RECONNECT_SECONDS = 10;
 
 const now = () => performance.now();
 
-const randomSkin = () => SKINS[Math.floor(Math.random() * SKINS.length)]!.id;
+const randomSkin = () => PUBLIC_SKINS[Math.floor(Math.random() * PUBLIC_SKINS.length)]!.id;
 
 /**
  * One arena. Public rooms are filled by matchmaking: the first player starts a lobby
@@ -101,6 +101,8 @@ export class ArenaRoom extends Room {
   private readonly players = new Map<string, Player>();
   /** Accounts playing in the current match, by snake id (kept if they leave mid-match). */
   private matchAccounts = new Map<number, string>();
+  /** The current match has been sent to the API (at its end, or when the room closed early). */
+  private reported = false;
 
   override onCreate(options: ArenaOptions = {}) {
     this.isPrivate = options.private === true;
@@ -190,6 +192,21 @@ export class ArenaRoom extends Room {
     this.broadcastMatch();
   }
 
+  /**
+   * Colyseus disposes a room as soon as its last human leaves (bots are not clients), and
+   * waits for this to finish. A match still in progress would otherwise vanish unreported,
+   * and every account that played it would lose its XP, coins and stats. So report it as it
+   * stands: snakes that already died keep their placement, survivors share the best one
+   * still open. Such a match is never rated, because nobody saw it through.
+   */
+  override async onDispose() {
+    const match = this.match;
+    if (this.phase === 'playing' && match && !this.reported) {
+      this.reported = true;
+      await this.reportResults(match, this.matchAccounts, { abandoned: true });
+    }
+  }
+
   private get humans(): number {
     return this.players.size;
   }
@@ -228,6 +245,7 @@ export class ArenaRoom extends Room {
         if (this.match!.finished) {
           this.winnerId = this.match!.state.winnerId;
           this.setPhase('ended', t + timing.resultsMs);
+          this.reported = true;
           void this.reportResults(this.match!, this.matchAccounts);
         }
         break;
@@ -248,6 +266,7 @@ export class ArenaRoom extends Room {
     const names = botNames(this.botsForNextMatch());
     const specs = [...humans.map((p) => ({ name: p.name })), ...names.map((name) => ({ name, isBot: true }))];
     this.match = new Match(specs, this.cfg, t);
+    this.reported = false;
     const skins = new Map<number, string>();
     this.matchAccounts = new Map();
     humans.forEach((p, i) => {
@@ -268,13 +287,14 @@ export class ArenaRoom extends Room {
   /**
    * Sends the finished match to the API, which grants rewards, then tells each
    * account holder still here what they got. Players who left are still paid.
+   * An `abandoned` match (the room closed before it ended) is paid but never rated.
    */
-  private async reportResults(match: Match, accounts: Map<number, string>): Promise<void> {
+  private async reportResults(match: Match, accounts: Map<number, string>, { abandoned = false } = {}): Promise<void> {
     if (accounts.size === 0) return;
     const report: MatchReport = {
       matchId: match.id,
       totalPlayers: match.state.snakes.length,
-      ranked: this.isRanked(match, accounts),
+      ranked: !abandoned && this.isRanked(match, accounts),
       results: match
         .results()
         .filter((r) => accounts.has(r.snakeId))
@@ -336,6 +356,7 @@ export class ArenaRoom extends Room {
         mode: this.mode.id,
       },
       config: this.cfg,
+      obstacles: this.match ? [...this.match.state.obstacles] : [],
     };
   }
 

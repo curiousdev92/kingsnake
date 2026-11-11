@@ -1,50 +1,16 @@
-import type { LobbyInfo } from "@snake/protocol";
-import { DEFAULT_MODE, MODES, getMode } from "@snake/game-modes";
 import { token } from "@snake/design-tokens";
-import { Button, Panel, Tabs } from "@snake/ui-kit";
-import {
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
+import { getMode } from "@snake/game-modes";
+import type { LobbyInfo } from "@snake/protocol";
+import { Button, Modal, Panel } from "@snake/ui-kit";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { create } from "zustand";
-import { DailyReward, ProfileCard, ShopButton } from "./AccountUi";
-import {
-  refreshProfile,
-  rename,
-  savedName,
-  saveName,
-  sessionToken,
-  useAccount,
-} from "./account";
-import { LeaderboardButton, SeasonReward } from "./RankedUi";
-import {
-  OnlineGame,
-  type JoinRequest,
-  type OnlineStats,
-} from "./game/OnlineGame";
+import { refreshProfile, savedName, sessionToken, useAccount } from "./account";
+import { OnlineGame, type JoinRequest, type OnlineStats, type StandingRow } from "./game/OnlineGame";
 import { Renderer } from "./game/Renderer";
+import { Home, normalizeCode } from "./Home";
 
 const useOnline = create<OnlineStats | null>(() => null);
 
-const CODE_LENGTH = 5;
-const MODE_KEY = "snake.mode";
-
-function savedMode(): string {
-  try {
-    return getMode(localStorage.getItem(MODE_KEY)).id;
-  } catch {
-    return DEFAULT_MODE.id;
-  }
-}
-
-const normalizeCode = (c: string) =>
-  c
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "")
-    .slice(0, CODE_LENGTH);
 const serverUrl = (): string | null => {
   const override = new URLSearchParams(location.search).get("server");
   if (override?.trim()) return override.trim();
@@ -52,8 +18,8 @@ const serverUrl = (): string | null => {
   const configured = import.meta.env.VITE_GAME_SERVER_URL?.trim();
   if (configured) return configured;
 
-  // The local dev server is available on port 2567; Vercel cannot expose a
-  // second long-lived WebSocket process behind the frontend hostname.
+  // Use the local game server only on local hosts. v0 and Vercel preview
+  // hosts may run in development mode, but do not expose the game-server port.
   if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
     return `ws://${location.hostname}:2567`;
   }
@@ -73,210 +39,33 @@ function codeFromUrl(): string | null {
 function inviteLink(code: string): string {
   const u = new URL(location.href);
   u.search = "";
+  u.hash = "";
   u.searchParams.set("room", code);
-  u.hash = "online";
   return u.toString();
 }
 
 /**
- * Online play: a menu (quick play, create or join a private room), then the room.
- * Open with `#online`; `?room=CODE#online` joins a private room directly; `?server=` overrides the URL.
+ * The home screen, then the room once the player presses Play.
+ * `?room=CODE` (an invite link) joins a private room directly; `?server=` overrides the URL.
  */
 export function OnlineApp() {
-  const profile = useAccount((s) => s.profile);
-  const [name, setName] = useState(savedName);
-  const [fallbackName] = useState(
-    () => `Player${Math.floor(Math.random() * 900 + 100)}`,
-  );
+  const [fallbackName] = useState(() => `Player${Math.floor(Math.random() * 900 + 100)}`);
   const [join, setJoin] = useState<JoinRequest | null>(() => {
     const code = codeFromUrl();
     return code ? { kind: "code", code } : null;
   });
 
-  // Once the account loads, its name is the source of truth.
-  const profileId = profile?.id;
-  useEffect(() => {
-    if (profile) setName(profile.name);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profileId]);
-
-  if (!join) {
-    return (
-      <Menu
-        name={name}
-        onName={setName}
-        onJoin={async (j) => {
-          const clean = name.trim();
-          saveName(clean);
-          if (profile && clean && clean !== profile.name) {
-            try {
-              await rename(clean);
-            } catch {
-              // keep playing under the old name
-            }
-          }
-          setJoin(j);
-        }}
-      />
-    );
-  }
+  if (!join) return <Home onJoin={setJoin} />;
   return (
     <GameView
       join={join}
-      name={
-        useAccount.getState().profile?.name ?? (name.trim() || fallbackName)
-      }
+      name={useAccount.getState().profile?.name ?? (savedName() || fallbackName)}
       onLeave={() => {
-        // Drop ?room= so a reload lands on the menu, not back in the room.
-        history.replaceState(null, "", `${location.pathname}#online`);
+        // Drop ?room= so a reload lands on the home screen, not back in the room.
+        history.replaceState(null, "", location.pathname);
         setJoin(null);
       }}
     />
-  );
-}
-
-const input: CSSProperties = {
-  boxSizing: "border-box",
-  width: "100%",
-  padding: `${token("space.sm")} ${token("space.md")}`,
-  background: token("color.background"),
-  color: token("color.text"),
-  border: `${token("border.width")} solid ${token("color.textMuted")}`,
-  borderRadius: token("radius.button"),
-  fontFamily: token("font.body"),
-  fontSize: token("font.sizeMd"),
-};
-
-function Menu({
-  name,
-  onName,
-  onJoin,
-}: {
-  name: string;
-  onName: (n: string) => void;
-  onJoin: (j: JoinRequest) => void | Promise<void>;
-}) {
-  const [code, setCode] = useState("");
-  const [modeId, setModeId] = useState(savedMode);
-  const mode = getMode(modeId);
-  const pickMode = (id: string) => {
-    setModeId(id);
-    try {
-      localStorage.setItem(MODE_KEY, id);
-    } catch {
-      // remembered for this visit only
-    }
-  };
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        display: "grid",
-        placeItems: "center",
-        padding: 16,
-        background: token("color.background"),
-        overflowY: "auto",
-      }}
-    >
-      <Panel
-        style={{
-          width: "min(360px, 100%)",
-          boxSizing: "border-box",
-          display: "grid",
-          gap: token("space.md"),
-        }}
-      >
-        <h1 style={{ ...title, margin: 0, textAlign: "center" }}>KingSnake</h1>
-        <ProfileCard />
-        <label
-          style={{
-            display: "grid",
-            gap: token("space.xs"),
-            fontSize: token("font.sizeSm"),
-            color: token("color.textMuted"),
-          }}
-        >
-          Your name
-          <input
-            style={input}
-            value={name}
-            maxLength={16}
-            placeholder="Player"
-            onChange={(e) => onName(e.target.value)}
-          />
-        </label>
-        <div style={{ display: "grid", gap: token("space.xs") }}>
-          <Tabs
-            items={MODES.map((m) => ({ value: m.id, label: m.name }))}
-            value={mode.id}
-            onChange={pickMode}
-          />
-          <div
-            style={{
-              fontSize: token("font.sizeSm"),
-              color: token("color.textMuted"),
-              textAlign: "center",
-            }}
-          >
-            {mode.description}
-          </div>
-        </div>
-        <Button
-          onClick={() => onJoin({ kind: "quick", mode: mode.id })}
-          style={{ fontSize: token("font.sizeLg") }}
-        >
-          Quick play
-        </Button>
-        <Button
-          variant="secondary"
-          onClick={() => onJoin({ kind: "create", mode: mode.id })}
-        >
-          Create private room
-        </Button>
-        <form
-          style={{ display: "flex", gap: token("space.sm") }}
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (code.length === CODE_LENGTH) onJoin({ kind: "code", code });
-          }}
-        >
-          <input
-            style={{
-              ...input,
-              textTransform: "uppercase",
-              letterSpacing: "0.15em",
-            }}
-            value={code}
-            placeholder="Room code"
-            aria-label="Room code"
-            onChange={(e) => setCode(normalizeCode(e.target.value))}
-          />
-          <Button
-            variant="secondary"
-            type="submit"
-            disabled={code.length !== CODE_LENGTH}
-          >
-            Join
-          </Button>
-        </form>
-        <DailyReward />
-        <SeasonReward />
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr 1fr",
-            gap: token("space.sm"),
-          }}
-        >
-          <ShopButton />
-          <LeaderboardButton />
-          <Button variant="secondary" onClick={() => (location.hash = "")}>
-            Sandbox
-          </Button>
-        </div>
-      </Panel>
-    </div>
   );
 }
 
@@ -306,7 +95,7 @@ function GameView({
     renderer.init(host.current!).then(() => {
       if (cancelled) return renderer.app.destroy(true);
       g = new OnlineGame(renderer, (s) => useOnline.setState(s, true), {
-        url, 
+        url,
         name,
         join,
         token: useAccount.getState().status === "ready" ? sessionToken() : null,
@@ -337,8 +126,8 @@ function GameView({
         <Panel style={{ maxWidth: 520, display: "grid", gap: token("space.md") }}>
           <strong>Online play is unavailable</strong>
           <p style={{ margin: 0, color: token("color.textMuted") }}>
-            The web client is running, but its game server has not been configured
-            for this deployment yet.
+            The web client is running, but its game server has not been configured for this
+            deployment yet.
           </p>
           <Button variant="secondary" onClick={onLeave}>
             Back to menu
@@ -353,6 +142,7 @@ function GameView({
       <div ref={host} style={{ position: "absolute", inset: 0 }} />
       <Hud />
       <PhaseOverlay game={game} onLeave={onLeave} />
+      <GameOverModal onLeave={onLeave} />
       {game && <NetPanel game={game} onLeave={onLeave} />}
     </div>
   );
@@ -362,32 +152,142 @@ function Hud() {
   const s = useOnline();
   if (!s || s.phase !== "playing") return null;
   return (
-    <Panel
+    <div
       style={{
         position: "absolute",
         top: 12,
         left: 12,
-        padding: token("space.md"),
+        display: "grid",
+        gap: 8,
+        justifyItems: "start",
         pointerEvents: "none",
       }}
     >
-      <div
-        style={{
-          fontFamily: token("font.display"),
-          fontSize: token("font.sizeLg"),
-        }}
-      >
-        {s.youAlive ? s.mass : "—"}
-      </div>
-      <div
-        style={{
-          color: token("color.textMuted"),
-          fontSize: token("font.sizeSm"),
-        }}
-      >
-        {s.alive} / {s.total} alive
-      </div>
+      <Panel style={{ padding: token("space.md") }}>
+        <div
+          style={{
+            fontFamily: token("font.display"),
+            fontSize: token("font.sizeLg"),
+          }}
+        >
+          {s.youAlive ? s.mass : "—"}
+        </div>
+        <div
+          style={{
+            color: token("color.textMuted"),
+            fontSize: token("font.sizeSm"),
+          }}
+        >
+          {s.alive} / {s.total} alive
+        </div>
+      </Panel>
+      <Standings rows={s.standings} />
+    </div>
+  );
+}
+
+/** Top 5 by mass; the local player is added below a gap when ranked lower or eliminated. */
+function Standings({ rows }: { rows: StandingRow[] }) {
+  if (rows.length === 0) return null;
+  const gap = rows.length > 1 && rows[rows.length - 1]!.you && rows[rows.length - 1]!.rank > rows.length;
+  return (
+    <Panel
+      style={{
+        padding: token("space.sm"),
+        width: 190,
+        boxSizing: "border-box",
+        fontSize: token("font.sizeSm"),
+        fontVariantNumeric: "tabular-nums",
+      }}
+    >
+      <div style={{ color: token("color.textMuted"), marginBottom: 4 }}>Standings</div>
+      {rows.map((r, i) => (
+        <div key={r.you ? "you" : r.rank}>
+          {gap && i === rows.length - 1 && (
+            <div style={{ color: token("color.textMuted"), textAlign: "center", lineHeight: 1 }}>⋯</div>
+          )}
+          <div
+            style={{
+              display: "flex",
+              gap: 6,
+              padding: "1px 0",
+              fontWeight: r.you ? 700 : 400,
+              opacity: r.out ? 0.6 : 1,
+            }}
+          >
+            <span style={{ width: 18, textAlign: "right" }}>{r.rank}</span>
+            <span
+              style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            >
+              {r.you ? `${r.name} (you)` : r.name}
+            </span>
+            <span>{r.out ? "out" : r.mass}</span>
+          </div>
+        </div>
+      ))}
     </Panel>
+  );
+}
+
+const formatTime = (sec: number) =>
+  `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+
+/** Shown once the local player dies: the game's numbers, and a way back to the main page. */
+function GameOverModal({ onLeave }: { onLeave: () => void }) {
+  const s = useOnline();
+  const [hidden, setHidden] = useState(false);
+  const alive = s?.youAlive ?? false;
+  // A new life (next match) shows the modal again.
+  useEffect(() => {
+    if (alive) setHidden(false);
+  }, [alive]);
+
+  const d = s?.deathStats;
+  const open = !!s && !!d && (s.phase === "playing" || s.phase === "ended") && !hidden;
+  if (!s || !d) return null;
+
+  const row = (label: string, value: ReactNode) => (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+      <span style={{ color: token("color.textMuted") }}>{label}</span>
+      <b>{value}</b>
+    </div>
+  );
+  return (
+    <Modal open={open} onClose={() => setHidden(true)} title="You died" width={380}>
+      <div style={{ display: "grid", gap: token("space.md") }}>
+        <div style={{ color: token("color.textMuted") }}>
+          You {d.deathReason ?? "died"}
+        </div>
+        <div style={{ ...title, textAlign: "center" }}>
+          #{d.placement} <span style={{ fontSize: token("font.sizeMd") }}>of {d.total}</span>
+        </div>
+        <div style={{ display: "grid", gap: 6 }}>
+          {row("Survived", formatTime(d.survivedSec))}
+          {row("Kills", d.kills)}
+          {row("Biggest size", d.peakMass)}
+          {row("Final size", d.finalMass)}
+          {s.rewards && row("Rewards", `+${s.rewards.xp} XP · +${s.rewards.coins} coins`)}
+          {s.rewards?.rating &&
+            row(
+              "Rating",
+              `${s.rewards.rating.after} (${s.rewards.rating.after >= s.rewards.rating.before ? "+" : ""}${s.rewards.rating.after - s.rewards.rating.before})`,
+            )}
+        </div>
+        {s.phase === "ended" && s.winnerName && (
+          <div style={{ textAlign: "center", color: token("color.textMuted") }}>
+            {s.winnerName} won the match
+          </div>
+        )}
+        <div style={{ display: "grid", gap: 8 }}>
+          <Button onClick={onLeave}>Back to main page</Button>
+          {s.phase === "playing" && (
+            <Button variant="secondary" onClick={() => setHidden(true)}>
+              Keep watching
+            </Button>
+          )}
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -427,13 +327,7 @@ const muted = {
   marginTop: token("space.sm"),
 } as const;
 
-function PhaseOverlay({
-  game,
-  onLeave,
-}: {
-  game: OnlineGame | null;
-  onLeave: () => void;
-}) {
+function PhaseOverlay({ game, onLeave }: { game: OnlineGame | null; onLeave: () => void }) {
   const s = useOnline();
   if (!s || s.connection === "connecting") {
     return (
@@ -449,9 +343,7 @@ function PhaseOverlay({
         {s.queue && (
           <div style={muted}>
             Your rating {s.queue.rating} · {s.queue.seconds}s
-            {s.queue.seconds >= 10 && (
-              <div>Widening the search to more ratings</div>
-            )}
+            {s.queue.seconds >= 10 && <div>Widening the search to more ratings</div>}
           </div>
         )}
         <div style={{ marginTop: token("space.lg") }}>
@@ -476,8 +368,7 @@ function PhaseOverlay({
   const lobby = s.lobby;
   switch (s.phase) {
     case "waiting":
-      if (lobby?.private && game)
-        return <PrivateLobby game={game} lobby={lobby} />;
+      if (lobby?.private && game) return <PrivateLobby game={game} lobby={lobby} />;
       return (
         <Center>
           <div style={title}>Finding players…</div>
@@ -487,13 +378,10 @@ function PhaseOverlay({
       return (
         <Center>
           <div style={muted}>Match starts in</div>
-          <div style={{ ...title, fontSize: 64 }}>
-            {s.phaseSecondsLeft ?? ""}
-          </div>
+          <div style={{ ...title, fontSize: 64 }}>{s.phaseSecondsLeft ?? ""}</div>
           {lobby && (
             <div style={muted}>
-              {lobby.players.length}{" "}
-              {lobby.players.length === 1 ? "player" : "players"}
+              {lobby.players.length} {lobby.players.length === 1 ? "player" : "players"}
               {lobby.bots > 0 && ` + ${lobby.bots} bots`}
               {!lobby.private && lobby.players.length < lobby.maxPlayers && (
                 <> · waiting for more players</>
@@ -505,9 +393,7 @@ function PhaseOverlay({
     case "ended":
       return (
         <Center>
-          <div style={title}>
-            {s.winnerName ? `${s.winnerName} wins!` : "Draw"}
-          </div>
+          <div style={title}>{s.winnerName ? `${s.winnerName} wins!` : "Draw"}</div>
           {s.rewards && (
             <div
               style={{
@@ -530,19 +416,16 @@ function PhaseOverlay({
             </div>
           )}
           <div style={muted}>
-            {lobby?.private ? "Back to the lobby" : "Next match"} in{" "}
-            {s.phaseSecondsLeft ?? 0}s
+            {lobby?.private ? "Back to the lobby" : "Next match"} in {s.phaseSecondsLeft ?? 0}s
           </div>
         </Center>
       );
     case "playing":
-      if (s.you === null)
-        return <Banner>Spectating: you will join the next match</Banner>;
+      if (s.you === null) return <Banner>Spectating: you will join the next match</Banner>;
       if (!s.youAlive && s.placement > 0) {
         return (
           <Banner>
-            You {s.deathReason ?? "died"} (#{s.placement} of {s.total}).
-            Spectating
+            You {s.deathReason ?? "died"} (#{s.placement} of {s.total})
           </Banner>
         );
       }
@@ -570,9 +453,7 @@ function PrivateLobby({ game, lobby }: { game: OnlineGame; lobby: LobbyInfo }) {
 
   return (
     <Center>
-      <div style={{ color: token("color.textMuted") }}>
-        Private room code · {mode.name}
-      </div>
+      <div style={{ color: token("color.textMuted") }}>Private room code · {mode.name}</div>
       <div
         style={{
           ...title,
@@ -611,12 +492,8 @@ function PrivateLobby({ game, lobby }: { game: OnlineGame; lobby: LobbyInfo }) {
             style={{ padding: `${token("space.xs")} ${token("space.md")}` }}
           >
             {p.name}
-            {p.host && (
-              <span style={{ color: token("color.textMuted") }}> · host</span>
-            )}
-            {p.you && (
-              <span style={{ color: token("color.textMuted") }}> · you</span>
-            )}
+            {p.host && <span style={{ color: token("color.textMuted") }}> · host</span>}
+            {p.you && <span style={{ color: token("color.textMuted") }}> · you</span>}
           </Panel>
         ))}
       </div>
@@ -671,9 +548,7 @@ function Banner({ children }: { children: ReactNode }) {
         pointerEvents: "none",
       }}
     >
-      <Panel style={{ padding: `${token("space.sm")} ${token("space.lg")}` }}>
-        {children}
-      </Panel>
+      <Panel style={{ padding: `${token("space.sm")} ${token("space.lg")}` }}>{children}</Panel>
     </div>
   );
 }
@@ -693,14 +568,11 @@ const KNOBS = [
 ] as const;
 type KnobKey = (typeof KNOBS)[number]["key"];
 
-/** Network simulator, prediction and interpolation controls with live diagnostics. */
-function NetPanel({
-  game,
-  onLeave,
-}: {
-  game: OnlineGame;
-  onLeave: () => void;
-}) {
+/** Network tuning is for development only: release builds never show it to players. */
+const DEV_TOOLS = import.meta.env.DEV;
+
+/** The Leave button, plus (dev builds only) network simulator, prediction and interpolation controls. */
+function NetPanel({ game, onLeave }: { game: OnlineGame; onLeave: () => void }) {
   const s = useOnline();
   const [open, setOpen] = useState(false);
   const [v, setV] = useState<Record<KnobKey, number>>({
@@ -712,6 +584,12 @@ function NetPanel({
   });
   const [predict, setPredict] = useState(game.predict);
   const [autoInterp, setAutoInterp] = useState(game.autoInterp);
+  const [confirming, setConfirming] = useState(false);
+
+  // Leaving costs something only while your snake is still alive in a running match.
+  const inMatch = !!s && s.phase === "playing" && s.you !== null && s.youAlive;
+  const ranked = !!s?.lobby && !s.lobby.private && getMode(s.lobby.mode).ranked;
+  const requestLeave = () => (inMatch ? setConfirming(true) : onLeave());
 
   const update = (key: KnobKey, value: number) => {
     const next = { ...v, [key]: value };
@@ -721,17 +599,9 @@ function NetPanel({
     game.predictor.smoothingMs = next.smoothing;
   };
 
-  const toggle = (
-    label: string,
-    checked: boolean,
-    set: (on: boolean) => void,
-  ) => (
+  const toggle = (label: string, checked: boolean, set: (on: boolean) => void) => (
     <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => set(e.target.checked)}
-      />
+      <input type="checkbox" checked={checked} onChange={(e) => set(e.target.checked)} />
       {label}
     </label>
   );
@@ -748,22 +618,43 @@ function NetPanel({
       }}
     >
       <div style={{ display: "flex", gap: 8 }}>
-        <Button
-          variant="secondary"
-          onClick={onLeave}
-          style={{ fontSize: token("font.sizeSm") }}
-        >
+        <Button variant="secondary" onClick={requestLeave} style={{ fontSize: token("font.sizeSm") }}>
           Leave
         </Button>
-        <Button
-          variant="secondary"
-          onClick={() => setOpen(!open)}
-          style={{ fontSize: token("font.sizeSm") }}
-        >
-          {open ? "Hide net" : "Net"}
-        </Button>
+        <Modal open={confirming && inMatch} onClose={() => setConfirming(false)} title="Leave the game?" width={380}>
+          <div style={{ display: "grid", gap: token("space.md") }}>
+            <div>If you leave now:</div>
+            <ul style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 6 }}>
+              <li>
+                You give up your run: your snake is taken over by a bot, and you can't win this match.
+              </li>
+              <li>
+                Your rewards use where you stand right now (about #{s?.alive} of {s?.total}) and the
+                time you survived, so you earn less XP and fewer coins than by playing on.
+              </li>
+              {ranked && (
+                <li>This is a ranked duel: the match carries on against a bot, and you will likely lose rating.</li>
+              )}
+            </ul>
+            <div style={{ display: "grid", gap: 8 }}>
+              <Button onClick={() => setConfirming(false)}>Keep playing</Button>
+              <Button variant="secondary" onClick={onLeave}>
+                Leave anyway
+              </Button>
+            </div>
+          </div>
+        </Modal>
+        {DEV_TOOLS && (
+          <Button
+            variant="secondary"
+            onClick={() => setOpen(!open)}
+            style={{ fontSize: token("font.sizeSm") }}
+          >
+            {open ? "Hide net" : "Net"}
+          </Button>
+        )}
       </div>
-      {open && (
+      {DEV_TOOLS && open && (
         <Panel
           style={{
             width: 250,
@@ -810,9 +701,7 @@ function NetPanel({
               {s.kbpsDown} kbps down · buffer {s.buffered}
               <br />
               interp {s.interpMs} ms{autoInterp ? " (auto)" : ""}
-              {s.extrapolating && (
-                <b style={{ color: token("color.text") }}> · extrapolating</b>
-              )}
+              {s.extrapolating && <b style={{ color: token("color.text") }}> · extrapolating</b>}
               <br />
               {s.predErr === null
                 ? "prediction off"

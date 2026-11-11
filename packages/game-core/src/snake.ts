@@ -10,10 +10,6 @@ export function bodyLengthForMass(mass: number, cfg: SimConfig): number {
   return cfg.baseLength + Math.max(0, mass) * cfg.lengthPerMass;
 }
 
-export function turnRateForMass(mass: number, cfg: SimConfig): number {
-  return cfg.baseTurnRate / (1 + mass / cfg.turnRateMassFalloff);
-}
-
 /**
  * Drops path points the body no longer needs, keeping one spacing of slack
  * so segment sampling never runs off the end.

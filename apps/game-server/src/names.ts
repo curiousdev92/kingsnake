@@ -1,6 +1,7 @@
 const BOT_NAMES = [
   'Noodle', 'Slinky', 'Zigzag', 'Pretzel', 'Wiggles', 'Spaghetti', 'Sprocket', 'Doodle',
   'Biscuit', 'Mango', 'Pickle', 'Ziggy', 'Boba', 'Taco', 'Nugget', 'Pixel',
+  'Churro', 'Waffle', 'Sushi', 'Gizmo', 'Pebble', 'Dumpling', 'Squiggle', 'Bean',
 ];
 
 /** `n` distinct bot names in random order. */

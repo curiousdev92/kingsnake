@@ -48,6 +48,6 @@ describe('helpers', () => {
 
   it('gives every icon a fallback glyph', () => {
     expect(fallbackGlyph('icon.close')).toBe('✕');
-    expect(fallbackGlyph('icon.shop')).toBe('S');
+    expect(fallbackGlyph('icon.missions')).toBe('M');
   });
 });

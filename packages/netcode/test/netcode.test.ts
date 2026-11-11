@@ -76,7 +76,7 @@ describe('NetworkSimulator', () => {
 
 describe('RemoteWorld', () => {
   it('rebuilds bodies from head positions to match the server', () => {
-    const cfg = makeConfig({ pelletDensity: 0, shrinkSchedule: [] });
+    const cfg = makeConfig({ pelletDensity: 0, shrinkSchedule: [], obstacleDensity: 0 });
     let state = createGame([{ name: 'a' }], cfg);
     const world = new RemoteWorld(cfg);
     const snap = (body: boolean) => ({
