@@ -12,16 +12,8 @@ import type { AssetManifest } from './src/types';
  *     },
  *   },
  *   icons: { 'icon.coin': { 1: '/ui/icon.coin@1x.png', 2: '/ui/icon.coin@2x.png' } },
- *
- * Snake skins are keyed by skin id, as an atlas or as loose files per part:
- *
- *   skins: {
- *     ember: { atlas: '/skins/skin.ember.json' },
- *     mint: { parts: { head: '/skins/mint/head.png', 'body.segment': '/skins/mint/segment.png' } },
- *   },
  */
 export const manifest: AssetManifest = {
   nineSlices: {},
   icons: {},
-  skins: {},
 };

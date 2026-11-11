@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { manifest } from '../assets.manifest';
-import { getIcon, getNineSlice, getSkinArt, resolveSrc, setManifest, skinFor } from '../src';
+import { getIcon, getNineSlice, resolveSrc, setManifest, skinFor } from '../src';
 
 const slice = { left: 8, top: 8, right: 8, bottom: 8 };
 
@@ -21,14 +21,6 @@ describe('manifest lookups', () => {
     expect(skinFor('button.primary', ['normal', 'pressed', 'disabled'])).toEqual({
       normal: { src: 'n.png', slice },
     });
-  });
-
-  it('looks up snake skin art by skin id, undefined without art', () => {
-    expect(getSkinArt('ember')).toBeUndefined();
-    const art = { atlas: '/skins/skin.ember.json' };
-    setManifest({ nineSlices: {}, icons: {}, skins: { ember: art } });
-    expect(getSkinArt('ember')).toBe(art);
-    expect(getSkinArt('mint')).toBeUndefined();
   });
 });
 

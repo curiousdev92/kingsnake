@@ -14,9 +14,6 @@ const GLYPHS: Partial<Record<IconName, string>> = {
   'icon.skull': '☠',
   'icon.heart': '♥',
   'icon.settings': '⚙',
-  'icon.shop': '$',
-  'icon.leaderboard': '≡',
-  'icon.profile': '☺',
   'icon.clock': '◷',
 };
 

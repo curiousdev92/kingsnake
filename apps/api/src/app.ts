@@ -1,12 +1,10 @@
 import { timingSafeEqual } from 'node:crypto';
 import cors from '@fastify/cors';
 import { signPlayerToken, verifyPlayerToken } from '@snake/auth';
-import { SKINS, previousSeason, seasonAt, seasonById, type MatchReport } from '@snake/meta';
+import { SKINS, seasonAt, seasonById, type MatchReport } from '@snake/meta';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import type { Db } from './db';
-import { ApiError, buy, claimDaily, createGuest, equip, getProfile, login, publicPlayer, recordMatch, register, rename, setAvatar } from './players';
-import { scoreBoard } from './boards';
-import { claimMonthlyPrize, markPrizePaid, payoutList } from './prizes';
+import { ApiError, buy, claimDaily, createGuest, equip, getProfile, publicPlayer, recordMatch, rename } from './players';
 import { claimSeasonReward, leaderboard } from './seasons';
 import { allowRequest } from './redis';
 
@@ -20,8 +18,7 @@ export interface AppOptions {
   logger?: boolean;
 }
 
-// Above the biggest room (20 snakes), so no full match is ever refused.
-const MAX_RESULTS_PER_MATCH = 32;
+const MAX_RESULTS_PER_MATCH = 16;
 
 /**
  * The meta API: guest accounts, profiles, daily rewards, the cosmetics shop, and
@@ -50,14 +47,6 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     return id;
   };
 
-  /** Like `playerOf`, but a missing or bad token means "nobody" instead of 401. */
-  const optionalPlayerOf = async (req: FastifyRequest): Promise<string | null> => {
-    const header = req.headers.authorization ?? '';
-    return header.startsWith('Bearer ') ? verifyPlayerToken(header.slice(7), authSecret) : null;
-  };
-
-  const rateLimited = { error: 'rate_limited', message: 'Too many attempts, try again in a minute' };
-
   const requireInternal = (req: FastifyRequest): void => {
     const given = Buffer.from(String(req.headers['x-internal-key'] ?? ''));
     const expected = Buffer.from(internalKey);
@@ -80,28 +69,11 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     return { token: await signPlayerToken(id, authSecret), profile: await getProfile(db, id, now()) };
   });
 
-  /** Email + password sign-up. A signed-in guest's progress moves to the new login. */
-  app.post('/auth/register', async (req, reply) => {
-    if (!(await allowRequest(`register:${req.ip}`))) return reply.status(429).send(rateLimited);
-    const b = body(req);
-    const id = await register(db, await optionalPlayerOf(req), b.email, b.password, b.name);
-    return { token: await signPlayerToken(id, authSecret), profile: await getProfile(db, id, now()) };
-  });
-
-  app.post('/auth/login', async (req, reply) => {
-    if (!(await allowRequest(`login:${req.ip}`))) return reply.status(429).send(rateLimited);
-    const id = await login(db, body(req).email, body(req).password);
-    return { token: await signPlayerToken(id, authSecret), profile: await getProfile(db, id, now()) };
-  });
-
   app.get('/me', async (req) => getProfile(db, await playerOf(req), now()));
 
-  /** Changes `name` and/or `avatar`. */
   app.patch('/me', async (req) => {
     const id = await playerOf(req);
-    const b = body(req);
-    if ('avatar' in b) await setAvatar(db, id, b.avatar);
-    if ('name' in b || !('avatar' in b)) await rename(db, id, b.name);
+    await rename(db, id, body(req).name);
     return getProfile(db, id, now());
   });
 
@@ -117,13 +89,6 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     return { coins, profile: await getProfile(db, id, now()) };
   });
 
-  /** Last month's top three claim a cash prize by leaving payout details (the owner pays by hand). */
-  app.post('/me/monthly-prize', async (req) => {
-    const id = await playerOf(req);
-    await claimMonthlyPrize(db, seasonAt(now()), id, body(req).details);
-    return getProfile(db, id, now());
-  });
-
   // ---- ranked ----
 
   /** A season's top 50 (`?season=YYYY-MM`, default current) plus, when signed in, your own line. */
@@ -131,20 +96,10 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     const query = req.query as { season?: string };
     const season = query.season === undefined ? seasonAt(now()) : seasonById(query.season);
     if (!season) throw new ApiError(400, 'invalid_season', 'Season ids look like 2026-10');
+    const header = req.headers.authorization ?? '';
     // Signed-in viewers also get their own line; a bad token just means no line.
-    const viewer = await optionalPlayerOf(req);
+    const viewer = header.startsWith('Bearer ') ? await verifyPlayerToken(header.slice(7), authSecret) : null;
     return { season, ...(await leaderboard(db, season, viewer)) };
-  });
-
-  /** Everyone, every mode, all time: ranked by XP earned. */
-  app.get('/leaderboard/overall', async (req) => scoreBoard(db, null, await optionalPlayerOf(req)));
-
-  /** Like overall, for one month (`?month=YYYY-MM`, default the current one). */
-  app.get('/leaderboard/monthly', async (req) => {
-    const query = req.query as { month?: string };
-    const month = query.month === undefined ? seasonAt(now()) : seasonById(query.month);
-    if (!month) throw new ApiError(400, 'invalid_month', 'Month ids look like 2026-10');
-    return scoreBoard(db, month, await optionalPlayerOf(req));
   });
 
   // ---- shop ----
@@ -170,25 +125,6 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     const player = await publicPlayer(db, (req.params as { id: string }).id, now());
     if (!player) throw new ApiError(404, 'player_not_found', 'Player not found');
     return player;
-  });
-
-  /** Who won a month's cash prizes, with payout details once claimed (`?month=YYYY-MM`, default last month). */
-  app.get('/internal/monthly-prizes', async (req) => {
-    requireInternal(req);
-    const q = req.query as { month?: string };
-    const month = q.month === undefined ? previousSeason(seasonAt(now())) : seasonById(q.month);
-    if (!month) throw new ApiError(400, 'invalid_month', 'Month ids look like 2026-10');
-    return { month, prizes: await payoutList(db, month) };
-  });
-
-  /** After paying a winner by hand: `{ month, playerId }`. */
-  app.post('/internal/monthly-prizes/paid', async (req) => {
-    requireInternal(req);
-    const b = body(req);
-    const month = seasonById(b.month);
-    if (!month || typeof b.playerId !== 'string') throw new ApiError(400, 'bad_request', 'Send { month: "YYYY-MM", playerId }');
-    await markPrizePaid(db, month, b.playerId);
-    return { ok: true };
   });
 
   app.post('/internal/match-results', async (req) => {

@@ -1,8 +1,6 @@
 import type { SimConfig } from './config';
 import { dist2, wrapAngle } from './math';
-import { SpatialHash } from './spatialHash';
 import type { GameState, Input, Pellet, Snake } from './types';
-import { touchesObstacle } from './world';
 
 const CANDIDATES = 11;
 const SPREAD = 0.32; // radians between candidate headings
@@ -35,7 +33,6 @@ export function botInput(state: GameState, bot: Snake, cfg: SimConfig): Input {
       const weight = 200 / d;
       if (dist2(px, py, center.x, center.y) > edge * edge) danger += weight;
       if (hitsBody(state, bot, px, py)) danger += weight * 2;
-      if (touchesObstacle(state.obstacles, px, py, bot.radius + 8)) danger += weight * 3;
     }
     const score =
       -danger * 10 +
@@ -76,41 +73,14 @@ function nearestFood(state: GameState, bot: Snake): Pellet | null {
   return best;
 }
 
-// Every living body segment, indexed once per state. Checking each probe against every
-// segment of every snake cost millions of distance tests per tick with big snakes.
-const bodyHash = new SpatialHash(64);
-// bodyHash item i -> owner snake index at [2i], segment index at [2i + 1].
-const bodyOwner: number[] = [];
-let indexed: GameState | null = null;
-
-function indexBodies(state: GameState): void {
-  if (indexed === state) return;
-  indexed = state;
-  bodyHash.clear();
-  bodyOwner.length = 0;
-  const snakes = state.snakes;
-  for (let si = 0; si < snakes.length; si++) {
-    const s = snakes[si]!;
-    if (!s.alive) continue;
-    for (let k = 0; k < s.segments.length; k++) {
-      const seg = s.segments[k]!;
-      bodyHash.insert(bodyOwner.length >> 1, seg.x, seg.y, s.radius);
-      bodyOwner.push(si, k);
-    }
-  }
-}
-
 function hitsBody(state: GameState, bot: Snake, x: number, y: number): boolean {
-  indexBodies(state);
-  // A segment of radius r is hit when within r + bot.radius + 6. Its cells cover its own
-  // circle, so querying the probe's (bot.radius + 6) circle finds every candidate.
-  return bodyHash.any(x, y, bot.radius + 6, (item) => {
-    const other = state.snakes[bodyOwner[item * 2]!]!;
-    if (other === bot) return false;
-    const seg = other.segments[bodyOwner[item * 2 + 1]!]!;
+  for (const other of state.snakes) {
+    if (!other.alive || other === bot) continue;
     const r = other.radius + bot.radius + 6;
-    return dist2(x, y, seg.x, seg.y) < r * r;
-  });
+    const r2 = r * r;
+    for (const seg of other.segments) if (dist2(x, y, seg.x, seg.y) < r2) return true;
+  }
+  return false;
 }
 
 /** Inputs for every living bot in the state. */

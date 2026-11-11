@@ -173,7 +173,6 @@ export class Predictor {
       tick: 0,
       snakes: [snake],
       pellets: [],
-      obstacles: [],
       arena: { center: { x: 0, y: 0 }, radius: r, startRadius: r, targetRadius: r },
       nextPelletId: 1,
       seed: 1,

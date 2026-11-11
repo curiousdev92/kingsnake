@@ -54,20 +54,4 @@ export class SpatialHash {
       }
     }
   }
-
-  /** True if `test` holds for some item whose cells overlap the query circle. Stops at the first hit. */
-  any(x: number, y: number, r: number, test: (item: number) => boolean): boolean {
-    const s = this.cellSize;
-    const x0 = Math.floor((x - r) / s);
-    const x1 = Math.floor((x + r) / s);
-    const y0 = Math.floor((y - r) / s);
-    const y1 = Math.floor((y + r) / s);
-    for (let cx = x0; cx <= x1; cx++) {
-      for (let cy = y0; cy <= y1; cy++) {
-        const bucket = this.cells.get(this.key(cx, cy));
-        if (bucket) for (const item of bucket) if (test(item)) return true;
-      }
-    }
-    return false;
-  }
 }

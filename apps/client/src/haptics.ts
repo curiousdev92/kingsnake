@@ -7,35 +7,12 @@ const VIBRATE_MS: Record<HapticKind, number | number[]> = { eat: 8, kill: [20, 4
 const MIN_GAP_MS: Record<HapticKind, number> = { eat: 90, kill: 0, death: 0, win: 0 };
 const last: Partial<Record<HapticKind, number>> = {};
 
-const ENABLED_KEY = 'snake.vibration';
-
-/** The player's Vibration setting (on unless turned off). */
-export function hapticsEnabled(): boolean {
-  try {
-    return localStorage.getItem(ENABLED_KEY) !== 'off';
-  } catch {
-    return true;
-  }
-}
-
-export function setHapticsEnabled(on: boolean): void {
-  try {
-    localStorage.setItem(ENABLED_KEY, on ? 'on' : 'off');
-  } catch {
-    // applies until reload only
-  }
-  enabled = on;
-}
-
-let enabled = hapticsEnabled();
-
 /**
  * Fire-and-forget feedback. Native builds use the Capacitor Haptics plugin; the web
  * falls back to `navigator.vibrate` (Android browsers only). Eats are throttled so
  * a pellet trail is a buzz, not a stutter.
  */
 export function haptic(kind: HapticKind): void {
-  if (!enabled) return;
   const now = performance.now();
   if (now - (last[kind] ?? -Infinity) < MIN_GAP_MS[kind]) return;
   last[kind] = now;

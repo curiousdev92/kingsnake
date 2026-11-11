@@ -14,8 +14,10 @@ export interface SimConfig {
   boostCostPerSecond: number;
   /** Boost is unavailable below this mass. */
   minBoostMass: number;
-  /** Radians per second. The same for every snake, whatever its mass. */
-  turnRate: number;
+  /** Radians per second for a starting-size snake. */
+  baseTurnRate: number;
+  /** Turn rate is divided by (1 + mass / turnRateMassFalloff). */
+  turnRateMassFalloff: number;
   startMass: number;
   segmentSpacing: number;
   /** Body length in world units = baseLength + mass * lengthPerMass. */
@@ -38,26 +40,17 @@ export interface SimConfig {
   shrinkSchedule: ShrinkStep[];
   /** World units per second the arena edge moves toward its target. */
   shrinkSpeed: number;
-  /** Rocks per 10,000 square units of arena. A head touching a rock dies. */
-  obstacleDensity: number;
-  obstacleMinRadius: number;
-  obstacleMaxRadius: number;
   headToHead: 'both-die' | 'bigger-wins';
 }
 
-/**
- * The game's fixed tuning, the same for every player and match. It is frozen: the
- * server sends it to clients for prediction, and nothing in a client may change it.
- * Modes only adjust the arena and head-to-head rule (see @snake/game-modes).
- */
-export const defaultConfig: Readonly<SimConfig> = deepFreeze({
+export const defaultConfig: SimConfig = {
   dt: 1 / 30,
-  baseSpeed: 200,
+  baseSpeed: 170,
   boostMultiplier: 2,
-  boostCostPerSecond: 2,
+  boostCostPerSecond: 6,
   minBoostMass: 12,
-  // Constant for all masses: a huge snake turns like a tiny starter snake.
-  turnRate: 10,
+  baseTurnRate: 5,
+  turnRateMassFalloff: 250,
   startMass: 20,
   segmentSpacing: 9,
   baseLength: 60,
@@ -71,23 +64,17 @@ export const defaultConfig: Readonly<SimConfig> = deepFreeze({
   maxPelletSpawnsPerTick: 6,
   deathDropRatio: 0.8,
   arenaBaseRadius: 900,
-  // 20-snake rooms: 900 + 20 × 90 = 2700 units, keeping pellet counts manageable.
-  arenaPerPlayer: 90,
-  // The arena only closes in modes that ask for it (battle royale, duel).
-  shrinkSchedule: [],
+  arenaPerPlayer: 140,
+  shrinkSchedule: [
+    { atSecond: 30, radiusFactor: 0.75 },
+    { atSecond: 75, radiusFactor: 0.5 },
+    { atSecond: 120, radiusFactor: 0.3 },
+    { atSecond: 165, radiusFactor: 0.15 },
+  ],
   shrinkSpeed: 12,
-  obstacleDensity: 0.03,
-  obstacleMinRadius: 24,
-  obstacleMaxRadius: 60,
   headToHead: 'both-die',
-});
+};
 
-function deepFreeze<T extends object>(value: T): T {
-  for (const v of Object.values(value)) if (v && typeof v === 'object') deepFreeze(v);
-  return Object.freeze(value);
-}
-
-/** A config for modes and tests: the fixed tuning plus overrides. */
 export function makeConfig(overrides: Partial<SimConfig> = {}): SimConfig {
   return { ...defaultConfig, ...overrides };
 }
