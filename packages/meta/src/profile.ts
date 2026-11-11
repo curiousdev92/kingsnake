@@ -1,3 +1,4 @@
+import type { MonthlyPrize } from './prizes';
 import type { SeasonStanding } from './season';
 
 export const MAX_NAME_LENGTH = 16;
@@ -11,6 +12,11 @@ export function sanitizeName(name: unknown): string {
 export interface Profile {
   id: string;
   name: string;
+  /** Set once the guest account is registered with email and password; null for guests. */
+  email: string | null;
+  /** Avatar id (`AVATARS`). */
+  avatar: string;
+  stats: PlayerStats;
   xp: number;
   level: number;
   xpIntoLevel: number;
@@ -22,6 +28,8 @@ export interface Profile {
   season: SeasonStanding;
   /** Last season's reward, while it is waiting to be claimed. */
   seasonReward: SeasonReward | null;
+  /** A cash prize won on last month's XP leaderboard, until it has been paid out. */
+  monthlyPrize: MonthlyPrize | null;
   equippedSkin: string;
   /** Owned skin ids, free ones included. */
   owned: string[];
@@ -34,11 +42,24 @@ export interface Profile {
   };
 }
 
+/** Lifetime totals over all recorded matches. */
+export interface PlayerStats {
+  matches: number;
+  wins: number;
+  kills: number;
+  /** Best placement (1 = won); null before the first match. */
+  bestPlacement: number | null;
+  /** Total time alive in matches. */
+  survivalMs: number;
+}
+
 /** End-of-season reward for one player. */
 export interface SeasonReward {
   standing: SeasonStanding;
   tier: string;
   coins: number;
+  /** Exclusive skin id that comes with the tier, if any. */
+  skin: string | null;
 }
 
 /** What a match result grants one player; forwarded to the client at match end. */

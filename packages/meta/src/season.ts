@@ -49,15 +49,18 @@ export function seasonStartRating(lastSeasonRating: number | null): number {
   return lastSeasonRating === null ? START_RATING : Math.round((lastSeasonRating + START_RATING) / 2);
 }
 
-/** End-of-season coins by final rating; only players who played a ranked match get one. */
-export const SEASON_REWARD_TIERS: readonly { minRating: number; name: string; coins: number }[] = [
-  { minRating: 1500, name: 'Diamond', coins: 600 },
-  { minRating: 1300, name: 'Gold', coins: 300 },
+/**
+ * End-of-season game bonuses by final rating: coins, and for the top tiers an exclusive
+ * skin too. Only players who played a ranked match get one.
+ */
+export const SEASON_REWARD_TIERS: readonly { minRating: number; name: string; coins: number; skin?: string }[] = [
+  { minRating: 1500, name: 'Diamond', coins: 600, skin: 'diamond' },
+  { minRating: 1300, name: 'Gold', coins: 300, skin: 'gold' },
   { minRating: 1100, name: 'Silver', coins: 150 },
   { minRating: 0, name: 'Bronze', coins: 60 },
 ];
 
-export function seasonTier(rating: number): { name: string; coins: number } {
+export function seasonTier(rating: number): { name: string; coins: number; skin?: string } {
   return SEASON_REWARD_TIERS.find((t) => rating >= t.minRating)!;
 }
 

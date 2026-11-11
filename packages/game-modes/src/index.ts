@@ -1,13 +1,14 @@
 import { makeConfig, type SimConfig } from '@snake/game-core';
+import { battleRoyale } from './battleRoyale';
 import { duel } from './duel';
 import { ffa } from './ffa';
 import type { GameMode } from './types';
 
 export type { GameMode } from './types';
-export { duel, ffa };
+export { battleRoyale, duel, ffa };
 
 /** Every playable mode, in menu order. A new mode is one file plus a line here. */
-export const MODES: readonly GameMode[] = [ffa, duel];
+export const MODES: readonly GameMode[] = [ffa, battleRoyale, duel];
 export const DEFAULT_MODE = ffa;
 
 /** The mode with this id, or the default for unknown/missing ids (ids come from clients). */
