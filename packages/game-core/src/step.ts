@@ -1,9 +1,9 @@
 import type { SimConfig } from './config';
 import { dist2, turnToward } from './math';
-import { bodyLengthForMass, radiusForMass, sampleSegments, trimPath } from './snake';
+import { bodyLengthForMass, radiusForMass, sampleSegments, trimPath, turnRateForMass } from './snake';
 import { SpatialHash } from './spatialHash';
 import type { GameEvent, GameState, Input, Snake, SnakeId } from './types';
-import { addPellet, cloneState, fillPellets, random, touchesObstacle } from './world';
+import { addPellet, cloneState, fillPellets, random } from './world';
 
 // Scratch structures reused across steps; they hold no state between calls.
 const segmentHash = new SpatialHash(64);
@@ -45,8 +45,8 @@ export function step(prev: GameState, inputs: ReadonlyMap<SnakeId, Input>, cfg: 
 }
 
 function moveSnake(state: GameState, s: Snake, cfg: SimConfig, dt: number): void {
-  // 1. Turn, limited by the constant turn rate (the same at every mass).
-  s.angle = turnToward(s.angle, s.targetAngle, cfg.turnRate * dt);
+  // 1. Turn, limited by a mass-dependent turn rate.
+  s.angle = turnToward(s.angle, s.targetAngle, turnRateForMass(s.mass, cfg) * dt);
 
   // 2. Move; boosting burns mass, which is dropped as pellets at the tail.
   const canBoost = s.boosting && s.mass > cfg.minBoostMass;
@@ -118,11 +118,6 @@ function findDeaths(state: GameState, cfg: SimConfig): Map<SnakeId, Death> {
   const { center, radius } = state.arena;
   for (const s of snakes) {
     if (s.alive && dist2(s.head.x, s.head.y, center.x, center.y) > radius * radius) die(s, null, 'arena');
-  }
-
-  // Rocks: a head touching one dies. Bodies pass through.
-  for (const s of snakes) {
-    if (s.alive && touchesObstacle(state.obstacles, s.head.x, s.head.y, s.radius)) die(s, null, 'rock');
   }
 
   // Head-to-head.

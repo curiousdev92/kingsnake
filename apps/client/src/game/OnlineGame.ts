@@ -24,7 +24,6 @@ import {
 } from '@snake/protocol';
 import { PlayerInput } from './PlayerInput';
 import { haptic } from '../haptics';
-import { sfx } from '../sound';
 import type { Renderer } from './Renderer';
 
 const INPUT_INTERVAL_MS = 1000 / 30;
@@ -44,28 +43,6 @@ export interface OnlineOptions {
   token?: string | null;
   /** Called with the account's rewards when a match ends. */
   onRewards?: (grant: Grant) => void;
-}
-
-/** One line of the live standings (ranked by mass among living snakes). */
-export interface StandingRow {
-  rank: number;
-  name: string;
-  mass: number;
-  you: boolean;
-  /** Eliminated: shown only for the local player, ranked by placement. */
-  out?: boolean;
-}
-
-/** The local player's numbers for the game they just lost. */
-export interface DeathStats {
-  placement: number;
-  total: number;
-  survivedSec: number;
-  kills: number;
-  /** Largest mass reached, and mass at the moment of death. */
-  peakMass: number;
-  finalMass: number;
-  deathReason: string | null;
 }
 
 export interface OnlineStats {
@@ -89,10 +66,6 @@ export interface OnlineStats {
   mass: number;
   alive: number;
   total: number;
-  /** Top 5 by mass, plus the local player at the bottom when ranked lower (or eliminated). */
-  standings: StandingRow[];
-  /** Set once the local player has died in the current match. */
-  deathStats: DeathStats | null;
   // Network diagnostics
   rttMs: number;
   snapshotsPerSec: number;
@@ -137,16 +110,6 @@ export class OnlineGame {
   private placement = 0;
   private deathReason: string | null = null;
   private rewards: Grant | null = null;
-  // Per-match numbers for the game-over screen and standings.
-  private kills = 0;
-  private peakMass = 0;
-  private playStartAt = performance.now();
-  private survivedMs = 0;
-  private deathMass = 0;
-  /** Own mass at the latest frame the snake was alive (the snapshot drops it before the death event lands). */
-  private lastOwnMass = 0;
-  private lastTickSecond: number | null = null;
-  private snakesNow: ViewSnake[] = [];
   private lastSample: { mass: number; alive: number; you: boolean; extrapolating: boolean } = { mass: 0, alive: 0, you: false, extrapolating: false };
   private connection: OnlineStats['connection'] = 'connecting';
   private queueRoom: Room | null = null;
@@ -241,7 +204,6 @@ export class OnlineGame {
       room.onMessage(REWARDS_MESSAGE, (g: Grant) =>
         this.down.deliver(() => {
           this.rewards = g;
-          sfx(g.levelAfter > g.levelBefore ? 'levelup' : 'coin');
           this.opts.onRewards?.(g);
         }, true),
       );
@@ -287,24 +249,10 @@ export class OnlineGame {
     this.world.cfg = m.config;
     this.predictor.setConfig(m.config);
     if (m.phase !== prev?.phase || m.you !== prev?.you) this.predictor.reset();
-    // Match start and result sounds, once per phase change.
-    if (m.phase !== prev?.phase) {
-      if (m.phase === 'playing' && m.you !== null) sfx('go');
-      if (m.phase === 'ended' && m.you !== null && m.winnerId === m.you) {
-        haptic('win');
-        sfx('win');
-      }
-    }
     if (m.phase === 'playing' && prev?.phase !== 'playing') {
       this.placement = 0;
       this.deathReason = null;
       this.rewards = null;
-      this.kills = 0;
-      this.peakMass = 0;
-      this.deathMass = 0;
-      this.lastOwnMass = 0;
-      this.survivedMs = 0;
-      this.playStartAt = performance.now();
       this.renderer.setSkins(new Map(m.roster.map((r) => [r.id, r.skin])));
     }
     if (m.phase === 'waiting' || m.phase === 'countdown') this.world.buffer.clear();
@@ -351,26 +299,12 @@ export class OnlineGame {
     const renderTime = this.clock.serverNow(now) - this.interpDelayMs;
     const you = this.match?.you ?? null;
     for (const d of this.world.applyEventsUntil(renderTime)) {
-      if (you !== null && d.killerId === you && d.snakeId !== you) {
-        haptic('kill');
-        sfx('kill');
-        this.kills++;
-      }
+      if (you !== null && d.killerId === you && d.snakeId !== you) haptic('kill');
       if (d.snakeId !== you) continue;
       haptic('death');
-      sfx('death');
-      this.survivedMs = performance.now() - this.playStartAt;
-      this.deathMass = this.lastOwnMass;
       this.placement = (this.world.buffer.latest?.snakes.length ?? 0) + 1;
       const killer = this.match?.roster.find((r) => r.id === d.killerId)?.name ?? 'someone';
-      this.deathReason =
-        d.cause === 'arena'
-          ? 'left the arena'
-          : d.cause === 'rock'
-            ? 'hit a rock'
-            : d.cause === 'head'
-              ? `hit ${killer} head-on`
-              : `ran into ${killer}`;
+      this.deathReason = d.cause === 'arena' ? 'left the arena' : d.cause === 'head' ? `hit ${killer} head-on` : `ran into ${killer}`;
     }
     const s = this.world.sample(renderTime);
     if (!s) {
@@ -391,62 +325,19 @@ export class OnlineGame {
       snakesA = swap(snakesA);
       snakesB = swap(snakesB);
     }
-    const obstacles = this.match?.obstacles ?? [];
-    const a = { ...s.a, snakes: snakesA, pellets: s.pellets, obstacles };
-    const b = { ...s.b, snakes: snakesB, pellets: s.pellets, obstacles };
+    const a = { ...s.a, snakes: snakesA, pellets: s.pellets };
+    const b = { ...s.b, snakes: snakesB, pellets: s.pellets };
     const me = snakesB.find((sn) => sn.id === you);
-    this.snakesNow = snakesB;
-    if (me) {
-      this.peakMass = Math.max(this.peakMass, me.mass);
-      this.lastOwnMass = me.mass;
-    }
-    // After death the camera holds where we died; only late joiners (no snake) follow the biggest one.
-    const focus = you ?? ([...s.b.snakes].sort((x, y) => y.mass - x.mass)[0]?.id ?? null);
+    // Spectate the biggest snake once our own is gone.
+    const focus = me ? you : ([...s.b.snakes].sort((x, y) => y.mass - x.mass)[0]?.id ?? null);
     this.renderer.render(a, b, s.t, focus);
     this.lastSample = { mass: me?.mass ?? 0, alive: s.b.snakes.length, you: !!me, extrapolating: s.extrapolating };
-  }
-
-  private nameOf(id: number): string {
-    return this.match?.roster.find((r) => r.id === id)?.name ?? 'Snake';
-  }
-
-  /** Top 5 living snakes by mass, then the local player if they are ranked lower or already out. */
-  private standings(): StandingRow[] {
-    const m = this.match;
-    if (!m || (m.phase !== 'playing' && m.phase !== 'ended')) return [];
-    const ranked = [...this.snakesNow].sort((a, b) => b.mass - a.mass);
-    const row = (s: ViewSnake, i: number): StandingRow => ({ rank: i + 1, name: this.nameOf(s.id), mass: Math.round(s.mass), you: s.id === m.you });
-    const rows = ranked.slice(0, 5).map(row);
-    if (m.you !== null && !rows.some((r) => r.you)) {
-      const i = ranked.findIndex((s) => s.id === m.you);
-      if (i >= 0) rows.push(row(ranked[i]!, i));
-      else if (this.placement > 0) rows.push({ rank: this.placement, name: this.nameOf(m.you), mass: Math.round(this.deathMass), you: true, out: true });
-    }
-    return rows;
-  }
-
-  private deathStats(): DeathStats | null {
-    const m = this.match;
-    if (!m || m.you === null || this.placement === 0 || this.lastSample.you) return null;
-    return {
-      placement: this.placement,
-      total: m.roster.length,
-      survivedSec: Math.round(this.survivedMs / 1000),
-      kills: this.kills,
-      peakMass: Math.round(Math.max(this.peakMass, this.deathMass)),
-      finalMass: Math.round(this.deathMass),
-      deathReason: this.deathReason,
-    };
   }
 
   private emitStats(now: number): void {
     this.bytesWindow = this.bytesWindow.filter((e) => now - e.t < 1000);
     const m = this.match;
     const serverNow = this.clock.serverNow(now);
-    // Tick for each of the last three countdown seconds.
-    const secondsLeft = m?.phaseEndsAt != null && this.clock.synced ? Math.max(0, Math.ceil((m.phaseEndsAt - serverNow) / 1000)) : null;
-    if (m?.phase === 'countdown' && secondsLeft !== null && secondsLeft >= 1 && secondsLeft <= 3 && secondsLeft !== this.lastTickSecond) sfx('tick');
-    this.lastTickSecond = m?.phase === 'countdown' ? secondsLeft : null;
     this.onStats({
       connection: this.connection,
       queue: this.queueInfo && { rating: this.queueInfo.rating, seconds: Math.floor((now - this.queueInfo.since) / 1000) },
@@ -463,8 +354,6 @@ export class OnlineGame {
       mass: Math.round(this.lastSample.mass),
       alive: this.lastSample.alive,
       total: m?.roster.length ?? 0,
-      standings: this.standings(),
-      deathStats: this.deathStats(),
       rttMs: Math.round(this.clock.rtt),
       snapshotsPerSec: this.bytesWindow.filter((e) => e.snapshot).length,
       kbpsDown: Math.round((this.bytesWindow.reduce((sum, e) => sum + e.bytes, 0) * 8) / 100) / 10,

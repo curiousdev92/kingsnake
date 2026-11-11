@@ -1,6 +1,5 @@
 import type { Vec2 } from '@snake/game-core';
-import type { Texture } from 'pixi.js';
-import { SpritePool } from './SpritePool';
+import { Graphics } from 'pixi.js';
 
 interface Particle {
   x: number;
@@ -23,16 +22,8 @@ const MAX_PARTICLES = 1500;
  * simulation, so it uses Math.random freely.
  */
 export class Effects {
-  private readonly pool: SpritePool;
+  readonly gfx = new Graphics();
   private parts: Particle[] = [];
-
-  constructor(disc: Texture) {
-    this.pool = new SpritePool(disc);
-  }
-
-  get container() {
-    return this.pool.container;
-  }
 
   /** Sparkles from an eaten pellet into the eater's head. */
   eat(at: Vec2, head: Vec2, color: number): void {
@@ -72,8 +63,7 @@ export class Effects {
   }
 
   update(dt: number): void {
-    const pool = this.pool;
-    pool.begin();
+    const g = this.gfx.clear();
     const drag = Math.exp(-3 * dt);
     let n = 0;
     for (const p of this.parts) {
@@ -90,16 +80,15 @@ export class Effects {
       p.vx *= drag;
       p.vy *= drag;
       const t = p.life / p.max;
-      pool.place(p.x, p.y, p.size * (0.4 + 0.6 * t), p.color, t);
+      g.circle(p.x, p.y, p.size * (0.4 + 0.6 * t)).fill({ color: p.color, alpha: t });
       this.parts[n++] = p;
     }
     this.parts.length = n;
-    pool.end();
   }
 
   clear(): void {
     this.parts = [];
-    this.pool.clear();
+    this.gfx.clear();
   }
 
   private add(p: Particle): void {

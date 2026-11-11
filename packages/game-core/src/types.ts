@@ -29,13 +29,6 @@ export interface Pellet {
   value: number;
 }
 
-/** A static rock. Heads die on touching it; bodies pass through. */
-export interface Obstacle {
-  x: number;
-  y: number;
-  radius: number;
-}
-
 export interface Arena {
   center: Vec2;
   radius: number;
@@ -50,7 +43,7 @@ export interface Input {
 
 export type GameEvent =
   | { type: 'eat'; snakeId: SnakeId; pelletId: number; value: number }
-  | { type: 'death'; snakeId: SnakeId; killerId: SnakeId | null; cause: 'body' | 'head' | 'arena' | 'rock' }
+  | { type: 'death'; snakeId: SnakeId; killerId: SnakeId | null; cause: 'body' | 'head' | 'arena' }
   | { type: 'win'; snakeId: SnakeId | null };
 
 export interface GameState {
@@ -58,8 +51,6 @@ export interface GameState {
   snakes: Snake[];
   pellets: Pellet[];
   arena: Arena;
-  /** Rocks, fixed for the whole match and never mutated. */
-  obstacles: readonly Obstacle[];
   nextPelletId: number;
   seed: number;
   /** Set once the match is decided. `null` winner means everyone died on the same tick. */

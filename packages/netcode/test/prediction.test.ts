@@ -4,7 +4,7 @@ import { AdaptiveDelay, Predictor, type ReconcileBase } from '../src';
 
 // Prediction doesn't simulate eating. A huge pelletValue means boosting still burns mass but never drops a
 // pellet the server snake could eat, so the exact-match tests compare movement alone.
-const cfg = makeConfig({ pelletDensity: 0, shrinkSchedule: [], obstacleDensity: 0, arenaBaseRadius: 5000, pelletValue: 1e9 });
+const cfg = makeConfig({ pelletDensity: 0, shrinkSchedule: [], arenaBaseRadius: 5000, pelletValue: 1e9 });
 
 const inputAt = (c: number): Input => ({ targetAngle: Math.sin(c / 9) * 2.5, boost: c % 45 < 12 });
 

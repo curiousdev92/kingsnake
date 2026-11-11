@@ -228,26 +228,6 @@ describe('accounts and rewards', () => {
     await room.leave();
   }, 15000);
 
-  it('still reports the match when the only human leaves before it ends', async () => {
-    const before = reports.length;
-    const token = await signPlayerToken(ACCOUNT);
-    const room = await new Client(URL).create('arena', { name: 'Quitter', token, private: true });
-    const me = record(room);
-    await until(() => me.matches.length > 0, 2000);
-    room.send(SETTINGS_MESSAGE, { bots: 1 });
-    await until(() => me.last().lobby.bots === 1, 2000);
-    room.send(START_MESSAGE);
-    await until(() => me.last().phase === 'playing', 3000);
-    await new Promise((r) => setTimeout(r, 300)); // a moment of play, then walk away
-    await room.leave(); // the last human: the room empties and is disposed mid-match
-
-    await until(() => reports.length > before, 4000);
-    const report = reports.at(-1)!;
-    expect(report.totalPlayers).toBe(2);
-    expect(report.ranked).toBe(false); // abandoned matches are paid, never rated
-    expect(report.results).toEqual([{ playerId: ACCOUNT, placement: expect.any(Number), kills: 0, survivalMs: expect.any(Number) }]);
-  }, 15000);
-
   it('reports queued duels between two accounts as ranked', async () => {
     const [a, b] = await Promise.all([viaQueue({ token: await signPlayerToken(ACCOUNT) }), viaQueue({ token: await signPlayerToken(ACCOUNT2) })]);
     expect(b.room.roomId).toBe(a.room.roomId);

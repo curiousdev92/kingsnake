@@ -1,6 +1,6 @@
 import { createGame, step, type Input } from '@snake/game-core';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_MODE, MODES, battleRoyale, duel, ffa, getMode, modeConfig } from '../src';
+import { DEFAULT_MODE, MODES, duel, getMode, modeConfig } from '../src';
 
 describe('game modes', () => {
   it('have unique ids and sane sizes', () => {
@@ -12,13 +12,6 @@ describe('game modes', () => {
     expect(getMode('duel')).toBe(duel);
     expect(getMode('nope')).toBe(DEFAULT_MODE);
     expect(getMode(undefined)).toBe(DEFAULT_MODE);
-  });
-
-  it('only battle royale and duel shrink the arena; free-for-all keeps a fixed size', () => {
-    expect(modeConfig(ffa).shrinkSchedule).toEqual([]);
-    expect(modeConfig(battleRoyale).shrinkSchedule.length).toBeGreaterThan(0);
-    expect(battleRoyale.room).not.toBe(ffa.room);
-    expect(MODES).toContain(battleRoyale);
   });
 
   it('duel runs a two-snake match in a smaller arena to a winner', () => {
