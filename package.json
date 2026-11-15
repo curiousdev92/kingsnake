@@ -7,9 +7,17 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
-    "dev:client": "turbo run dev --filter=@snake/client"
+    "dev:client": "turbo run dev --filter=@snake/client",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint --fix .",
+    "fmt": "oxfmt .",
+    "fmt:check": "oxfmt --check .",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check ."
   },
   "devDependencies": {
+    "oxfmt": "^0.78.0",
+    "oxlint": "^1.93.0",
     "turbo": "^2.5.0",
     "typescript": "^5.8.0",
     "vitest": "^3.2.0"
