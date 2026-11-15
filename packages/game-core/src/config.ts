@@ -42,7 +42,7 @@ export interface SimConfig {
   obstacleDensity: number;
   obstacleMinRadius: number;
   obstacleMaxRadius: number;
-  headToHead: 'both-die' | 'bigger-wins';
+  headToHead: "both-die" | "bigger-wins";
 }
 
 /**
@@ -79,11 +79,11 @@ export const defaultConfig: Readonly<SimConfig> = deepFreeze({
   obstacleDensity: 0.03,
   obstacleMinRadius: 24,
   obstacleMaxRadius: 60,
-  headToHead: 'both-die',
+  headToHead: "both-die",
 });
 
 function deepFreeze<T extends object>(value: T): T {
-  for (const v of Object.values(value)) if (v && typeof v === 'object') deepFreeze(v);
+  for (const v of Object.values(value)) if (v && typeof v === "object") deepFreeze(v);
   return Object.freeze(value);
 }
 

@@ -6,8 +6,8 @@ import {
   type Input,
   type PlayerSpec,
   type SimConfig,
-} from '@snake/game-core';
-import type { DeathSnap, EventsMsg, InputMsg, SnapshotMsg } from '@snake/protocol';
+} from "@snake/game-core";
+import type { DeathSnap, EventsMsg, InputMsg, SnapshotMsg } from "@snake/protocol";
 
 /** How often each snake's full body is resent, in ticks (~1 s at 30 Hz). */
 export const KEYFRAME_TICKS = 30;
@@ -66,7 +66,8 @@ export class Match {
   /** Queues a player's input. Older or duplicate sequence numbers are ignored. */
   setInput(snakeId: number, msg: InputMsg): void {
     let q = this.inputs.get(snakeId);
-    if (!q) this.inputs.set(snakeId, (q = { queue: [], lastReceived: 0, lastApplied: 0, current: null }));
+    if (!q)
+      this.inputs.set(snakeId, (q = { queue: [], lastReceived: 0, lastApplied: 0, current: null }));
     if (msg.seq <= q.lastReceived) return;
     q.lastReceived = msg.seq;
     q.queue.push({ seq: msg.seq, input: { targetAngle: msg.targetAngle, boost: msg.boost } });
@@ -123,11 +124,12 @@ export class Match {
     const s = this.state;
     const aliveAfter = s.snakes.filter((sn) => sn.alive).length;
     for (const e of s.events) {
-      if (e.type !== 'death') continue;
+      if (e.type !== "death") continue;
       // Snakes dying on the same tick share a placement.
       this.placements.set(e.snakeId, aliveAfter + 1);
       this.deathTick.set(e.snakeId, s.tick);
-      if (e.killerId !== null && e.killerId !== e.snakeId) this.kills.set(e.killerId, (this.kills.get(e.killerId) ?? 0) + 1);
+      if (e.killerId !== null && e.killerId !== e.snakeId)
+        this.kills.set(e.killerId, (this.kills.get(e.killerId) ?? 0) + 1);
     }
     if (s.finished && s.winnerId !== null) this.placements.set(s.winnerId, 1);
   }
@@ -151,14 +153,30 @@ export class Match {
     for (const p of prev.pellets) if (!nextIds.has(p.id)) removed.push(p.id);
     const added = next.pellets.filter((p) => p.id >= prev.nextPelletId);
     const deaths: DeathSnap[] = [];
-    for (const e of next.events) if (e.type === 'death') deaths.push({ snakeId: e.snakeId, killerId: e.killerId, cause: e.cause });
-    return { tick: next.tick, serverTime: this.tickTime(next.tick), reset: false, added, removed, deaths };
+    for (const e of next.events)
+      if (e.type === "death")
+        deaths.push({ snakeId: e.snakeId, killerId: e.killerId, cause: e.cause });
+    return {
+      tick: next.tick,
+      serverTime: this.tickTime(next.tick),
+      reset: false,
+      added,
+      removed,
+      deaths,
+    };
   }
 
   /** Every current pellet, telling the client to drop what it had. Sent on join and match start. */
   fullPellets(): EventsMsg {
     const s = this.state;
-    return { tick: s.tick, serverTime: this.tickTime(s.tick), reset: true, added: s.pellets.map((p) => ({ ...p })), removed: [], deaths: [] };
+    return {
+      tick: s.tick,
+      serverTime: this.tickTime(s.tick),
+      reset: true,
+      added: s.pellets.map((p) => ({ ...p })),
+      removed: [],
+      deaths: [],
+    };
   }
 
   /**

@@ -15,17 +15,17 @@ Priorities: clean, maintainable, buttery smooth, beautiful and rewarding.
 
 ## 2. Tech stack
 
-| Layer | Choice |
-|---|---|
-| Rendering | PixiJS (WebGL): mesh-rope snake bodies, batched pellets |
-| UI shell | React + Zustand |
-| Mobile | Capacitor (haptics, push, IAP plugins) |
+| Layer           | Choice                                                                                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Rendering       | PixiJS (WebGL): mesh-rope snake bodies, batched pellets                                                                         |
+| UI shell        | React + Zustand                                                                                                                 |
+| Mobile          | Capacitor (haptics, push, IAP plugins)                                                                                          |
 | Realtime server | Colyseus (Node): rooms, matchmaking, reconnection. Hot-path game snapshots use custom compact binary messages, not Schema state |
-| Meta API | Fastify (or NestJS): profiles, rewards, shop, friends, leaderboards |
-| Database | PostgreSQL + Redis |
-| Auth | Supabase Auth or Firebase Auth (guest, Google, Apple) |
-| Hosting | Docker on Fly.io, multi-region |
-| Tooling | pnpm + Turborepo, Vitest, Playwright, GitHub Actions |
+| Meta API        | Fastify (or NestJS): profiles, rewards, shop, friends, leaderboards                                                             |
+| Database        | PostgreSQL + Redis                                                                                                              |
+| Auth            | Supabase Auth or Firebase Auth (guest, Google, Apple)                                                                           |
+| Hosting         | Docker on Fly.io, multi-region                                                                                                  |
+| Tooling         | pnpm + Turborepo, Vitest, Playwright, GitHub Actions                                                                            |
 
 Transport is WebSocket (Slither.io itself uses it). WebTransport is out of scope.
 
@@ -60,6 +60,7 @@ State: `snakes[]`, `pellets[]`, `arena { center, radius, targetRadius }`, `tick`
 Snake: `id`, `head {x, y}`, `angle`, `targetAngle`, `speed`, `boosting`, `mass`, `path` (ring buffer of recent head positions), derived `segments` (sampled along `path` at a fixed spacing), `radius` (grows slowly with mass), `alive`.
 
 Per fixed step (server sim 30 Hz):
+
 1. Turn `angle` toward `targetAngle`, limited by `maxTurnRate` (smaller for bigger snakes).
 2. Move forward by `speed * dt` (boost multiplies speed and burns mass, dropping pellets).
 3. Push the new head position into `path`; trim the path to the length the mass needs.
@@ -90,7 +91,7 @@ interface GameMode {
     tickRate: number;
     arena: { baseRadius: number; perPlayer: number; shrinkSchedule: ShrinkStep[] };
     teams: boolean;
-    headToHead: 'both-die' | 'bigger-wins';
+    headToHead: "both-die" | "bigger-wins";
   };
   onTick(state): void;
   onPlayerDied(state, player): void;
@@ -157,28 +158,34 @@ Scaffold the pnpm + Turborepo monorepo per section 3. Implement `game-core` per 
 Steps 1-6 of the build order are done. What is left, by area:
 
 **Step 7: mobile and polish**
+
 - Generate the native projects (`pnpm exec cap add android`, `cap add ios`, then `pnpm cap:sync` in `apps/client`). Needs Android Studio, and Xcode on a Mac.
 - Test touch controls and haptics on real phones.
 - Online eat haptics: the protocol's pellet events don't say who ate, so online play only buzzes on kills and deaths.
 
 **Step 8: real art**
+
 - Snake skin atlases (skins are colour palettes until then), pellet and effect atlases.
 - 9-slice UI art and icons in `assets.manifest.ts` (empty today; everything uses token fallbacks).
 - Smooth body rendering (`MeshRope` or sprite chain) instead of placeholder circles.
 
 **Step 9: modes, ranked, seasons**
+
 - More modes: teams, timed score, endless Slither-style, power-ups.
 - Rule hooks on `GameMode` (per tick, on death, win check) and in game-core's `step`, needed by any mode that changes the rules rather than just the settings.
 
 **Rewards and cosmetics (section 9)**
+
 - Missions and the optional season pass.
 - Cosmetics beyond skins: trails, boost effects, death effects, avatars, emotes.
 
 **Accounts and social**
+
 - Real sign-in (Google, Apple or Supabase) exchanged for the existing player token; only guest accounts exist.
 - Friends list.
 
 **Infrastructure**
+
 - Redis for sessions (leaderboards run on Postgres until they need more).
 - Lint setup.
 - Production deployment (hosting, `AUTH_SECRET`/`INTERNAL_KEY`/`DATABASE_URL` configuration).

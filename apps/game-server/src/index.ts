@@ -1,8 +1,8 @@
-import { Server } from '@colyseus/core';
-import { WebSocketTransport } from '@colyseus/ws-transport';
-import { MODES, queueRoomName } from '@snake/game-modes';
-import { ArenaRoom } from './ArenaRoom';
-import { QueueRoom } from './QueueRoom';
+import { Server } from "@colyseus/core";
+import { WebSocketTransport } from "@colyseus/ws-transport";
+import { MODES, queueRoomName } from "@snake/game-modes";
+import { ArenaRoom } from "./ArenaRoom";
+import { QueueRoom } from "./QueueRoom";
 
 const port = Number(process.env.PORT ?? 2567);
 

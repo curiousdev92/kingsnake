@@ -4,31 +4,19 @@
     {
       "name": "client",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--filter",
-        "@snake/client",
-        "dev"
-      ],
+      "runtimeArgs": ["--filter", "@snake/client", "dev"],
       "port": 5173
     },
     {
       "name": "game-server",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--filter",
-        "@snake/game-server",
-        "dev"
-      ],
+      "runtimeArgs": ["--filter", "@snake/game-server", "dev"],
       "port": 2567
     },
     {
       "name": "api",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--filter",
-        "@snake/api",
-        "dev"
-      ],
+      "runtimeArgs": ["--filter", "@snake/api", "dev"],
       "port": 3000
     }
   ]

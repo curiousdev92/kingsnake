@@ -7,15 +7,15 @@ description: Diagnose KingSnake online problems such as jitter, rubber-banding, 
 
 Match the symptom first:
 
-| Symptom | Look at |
-|---|---|
-| Own snake jitters or rubber-bands | `Predictor.ts`; input lockstep in `Match.ts` (one input per tick, `lastSeq` = last applied) |
-| Other snakes stutter | `SnapshotBuffer.ts`, `AdaptiveDelay.ts` (delay below one-way latency means constant extrapolation) |
-| Bodies wrong or snapping | `RemoteWorld.ts`; keyframe stagger in `Match.ts` |
-| Pellets wrong | `Match.diff`; `reset: true` handling in `RemoteWorld.ts` |
-| Steers into wall at spawn | `PlayerInput.resetAim(spawnAngle)` in `OnlineGame.ts` |
-| Client ticks drift | 30 Hz accumulator in `OnlineGame.ts` |
-| Production can't connect | `VITE_GAME_SERVER_URL`, `VITE_API_URL` at client build time; `CORS_ORIGINS`, `API_URL` on servers; `?server=ws://…` overrides the URL |
+| Symptom                           | Look at                                                                                                                               |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Own snake jitters or rubber-bands | `Predictor.ts`; input lockstep in `Match.ts` (one input per tick, `lastSeq` = last applied)                                           |
+| Other snakes stutter              | `SnapshotBuffer.ts`, `AdaptiveDelay.ts` (delay below one-way latency means constant extrapolation)                                    |
+| Bodies wrong or snapping          | `RemoteWorld.ts`; keyframe stagger in `Match.ts`                                                                                      |
+| Pellets wrong                     | `Match.diff`; `reset: true` handling in `RemoteWorld.ts`                                                                              |
+| Steers into wall at spawn         | `PlayerInput.resetAim(spawnAngle)` in `OnlineGame.ts`                                                                                 |
+| Client ticks drift                | 30 Hz accumulator in `OnlineGame.ts`                                                                                                  |
+| Production can't connect          | `VITE_GAME_SERVER_URL`, `VITE_API_URL` at client build time; `CORS_ORIGINS`, `API_URL` on servers; `?server=ws://…` overrides the URL |
 
 `vercel.json` deploys only the client, so the game-server and API must be hosted elsewhere.
 

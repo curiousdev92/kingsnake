@@ -8,34 +8,41 @@
  * from one document-level listener (`installUiSounds`), so components need no wiring.
  */
 export type SfxName =
-  | 'click' // a button
-  | 'select' // a tab, card, switch or checkbox
-  | 'open' // a modal appears
-  | 'eat' // you ate a pellet
-  | 'boost' // you started boosting
-  | 'death' // you died
-  | 'kill' // you killed someone
-  | 'pop' // another snake died nearby
-  | 'tick' // countdown second
-  | 'go' // match start
-  | 'win' // you won the match
-  | 'coin' // coins or XP granted
-  | 'levelup'
-  | 'reward' // a bigger prize (season reward, cash prize)
-  | 'purchase'
-  | 'equip'
-  | 'error';
+  | "click" // a button
+  | "select" // a tab, card, switch or checkbox
+  | "open" // a modal appears
+  | "eat" // you ate a pellet
+  | "boost" // you started boosting
+  | "death" // you died
+  | "kill" // you killed someone
+  | "pop" // another snake died nearby
+  | "tick" // countdown second
+  | "go" // match start
+  | "win" // you won the match
+  | "coin" // coins or XP granted
+  | "levelup"
+  | "reward" // a bigger prize (season reward, cash prize)
+  | "purchase"
+  | "equip"
+  | "error";
 
-const ENABLED_KEY = 'snake.sound';
-const VOLUME_KEY = 'snake.volume';
+const ENABLED_KEY = "snake.sound";
+const VOLUME_KEY = "snake.volume";
 const DEFAULT_VOLUME = 0.7;
 
 /** Fastest repeat per effect, so a pellet trail or a button mash is a texture, not a buzz. */
-const MIN_GAP_MS: Partial<Record<SfxName, number>> = { click: 30, select: 30, eat: 45, boost: 300, pop: 90, kill: 80 };
+const MIN_GAP_MS: Partial<Record<SfxName, number>> = {
+  click: 30,
+  select: 30,
+  eat: 45,
+  boost: 300,
+  pop: 90,
+  kill: 80,
+};
 
 function readEnabled(): boolean {
   try {
-    return localStorage.getItem(ENABLED_KEY) !== 'off';
+    return localStorage.getItem(ENABLED_KEY) !== "off";
   } catch {
     return true;
   }
@@ -44,7 +51,9 @@ function readEnabled(): boolean {
 function readVolume(): number {
   try {
     const v = Number(localStorage.getItem(VOLUME_KEY));
-    return localStorage.getItem(VOLUME_KEY) !== null && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : DEFAULT_VOLUME;
+    return localStorage.getItem(VOLUME_KEY) !== null && Number.isFinite(v)
+      ? Math.min(1, Math.max(0, v))
+      : DEFAULT_VOLUME;
   } catch {
     return DEFAULT_VOLUME;
   }
@@ -63,7 +72,7 @@ export const soundVolume = (): number => volume;
 export function setSoundEnabled(on: boolean): void {
   enabled = on;
   try {
-    localStorage.setItem(ENABLED_KEY, on ? 'on' : 'off');
+    localStorage.setItem(ENABLED_KEY, on ? "on" : "off");
   } catch {
     // applies until reload only
   }
@@ -85,7 +94,9 @@ function audio(): AudioContext | null {
   if (!ctx) {
     // Creating a context before a gesture only logs a warning and stays silent.
     if (!(navigator.userActivation?.hasBeenActive ?? true)) return null;
-    const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    const Ctor =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctor) return null;
     try {
       ctx = new Ctor();
@@ -96,7 +107,7 @@ function audio(): AudioContext | null {
     master.gain.value = volume;
     master.connect(ctx.destination);
   }
-  if (ctx.state === 'suspended') void ctx.resume().catch(() => {});
+  if (ctx.state === "suspended") void ctx.resume().catch(() => {});
   return ctx;
 }
 
@@ -109,7 +120,12 @@ interface ToneOptions {
   delay?: number;
 }
 
-function tone(c: AudioContext, freq: number, dur: number, { type = 'sine', gain = 0.2, to, delay = 0 }: ToneOptions = {}): void {
+function tone(
+  c: AudioContext,
+  freq: number,
+  dur: number,
+  { type = "sine", gain = 0.2, to, delay = 0 }: ToneOptions = {},
+): void {
   const t0 = c.currentTime + delay;
   const osc = c.createOscillator();
   const env = c.createGain();
@@ -134,7 +150,11 @@ interface NoiseOptions {
 }
 
 /** A band of noise whose centre frequency sweeps from `from` to `to`: whooshes and crunches. */
-function burst(c: AudioContext, dur: number, { from, to, q = 1, gain = 0.2, delay = 0 }: NoiseOptions): void {
+function burst(
+  c: AudioContext,
+  dur: number,
+  { from, to, q = 1, gain = 0.2, delay = 0 }: NoiseOptions,
+): void {
   if (!noise) {
     noise = c.createBuffer(1, c.sampleRate, c.sampleRate);
     const data = noise.getChannelData(0);
@@ -145,7 +165,7 @@ function burst(c: AudioContext, dur: number, { from, to, q = 1, gain = 0.2, dela
   src.buffer = noise;
   src.loop = true;
   const filter = c.createBiquadFilter();
-  filter.type = 'bandpass';
+  filter.type = "bandpass";
   filter.Q.value = q;
   filter.frequency.setValueAtTime(from, t0);
   filter.frequency.exponentialRampToValueAtTime(to, t0 + dur);
@@ -159,55 +179,64 @@ function burst(c: AudioContext, dur: number, { from, to, q = 1, gain = 0.2, dela
 }
 
 /** Notes played one after another. */
-function arpeggio(c: AudioContext, freqs: number[], step: number, dur: number, type: OscillatorType, gain: number): void {
-  freqs.forEach((f, i) => tone(c, f, i === freqs.length - 1 ? dur * 2 : dur, { type, gain, delay: i * step }));
+function arpeggio(
+  c: AudioContext,
+  freqs: number[],
+  step: number,
+  dur: number,
+  type: OscillatorType,
+  gain: number,
+): void {
+  freqs.forEach((f, i) =>
+    tone(c, f, i === freqs.length - 1 ? dur * 2 : dur, { type, gain, delay: i * step }),
+  );
 }
 
 const SOUNDS: Record<SfxName, (c: AudioContext) => void> = {
-  click: (c) => tone(c, 880, 0.05, { type: 'square', gain: 0.12, to: 660 }),
+  click: (c) => tone(c, 880, 0.05, { type: "square", gain: 0.12, to: 660 }),
   select: (c) => {
-    tone(c, 520, 0.06, { type: 'triangle', gain: 0.2 });
-    tone(c, 780, 0.08, { type: 'triangle', gain: 0.2, delay: 0.05 });
+    tone(c, 520, 0.06, { type: "triangle", gain: 0.2 });
+    tone(c, 780, 0.08, { type: "triangle", gain: 0.2, delay: 0.05 });
   },
-  open: (c) => tone(c, 380, 0.14, { type: 'sine', gain: 0.18, to: 720 }),
+  open: (c) => tone(c, 380, 0.14, { type: "sine", gain: 0.18, to: 720 }),
   eat: (c) => {
     const f = 480 + Math.random() * 260;
-    tone(c, f, 0.07, { type: 'sine', gain: 0.2, to: f * 1.7 });
+    tone(c, f, 0.07, { type: "sine", gain: 0.2, to: f * 1.7 });
   },
   boost: (c) => burst(c, 0.35, { from: 400, to: 1800, q: 1.2, gain: 0.18 }),
   death: (c) => {
-    tone(c, 330, 0.55, { type: 'sawtooth', gain: 0.26, to: 55 });
+    tone(c, 330, 0.55, { type: "sawtooth", gain: 0.26, to: 55 });
     burst(c, 0.4, { from: 1400, to: 180, q: 0.8, gain: 0.22 });
   },
   kill: (c) => {
-    tone(c, 660, 0.08, { type: 'square', gain: 0.16 });
-    tone(c, 990, 0.16, { type: 'square', gain: 0.16, delay: 0.07 });
+    tone(c, 660, 0.08, { type: "square", gain: 0.16 });
+    tone(c, 990, 0.16, { type: "square", gain: 0.16, delay: 0.07 });
   },
   pop: (c) => burst(c, 0.14, { from: 900, to: 280, q: 0.9, gain: 0.08 }),
-  tick: (c) => tone(c, 700, 0.07, { type: 'square', gain: 0.16 }),
+  tick: (c) => tone(c, 700, 0.07, { type: "square", gain: 0.16 }),
   go: (c) => {
-    tone(c, 660, 0.1, { type: 'square', gain: 0.18 });
-    tone(c, 990, 0.28, { type: 'square', gain: 0.18, delay: 0.1 });
+    tone(c, 660, 0.1, { type: "square", gain: 0.18 });
+    tone(c, 990, 0.28, { type: "square", gain: 0.18, delay: 0.1 });
   },
-  win: (c) => arpeggio(c, [523, 659, 784, 1047], 0.12, 0.16, 'triangle', 0.26),
+  win: (c) => arpeggio(c, [523, 659, 784, 1047], 0.12, 0.16, "triangle", 0.26),
   coin: (c) => {
-    tone(c, 1200, 0.08, { type: 'sine', gain: 0.2 });
-    tone(c, 1600, 0.2, { type: 'sine', gain: 0.2, delay: 0.07 });
+    tone(c, 1200, 0.08, { type: "sine", gain: 0.2 });
+    tone(c, 1600, 0.2, { type: "sine", gain: 0.2, delay: 0.07 });
   },
-  levelup: (c) => arpeggio(c, [392, 523, 659, 784, 1047], 0.09, 0.14, 'triangle', 0.24),
-  reward: (c) => arpeggio(c, [659, 784, 988, 1319], 0.1, 0.16, 'triangle', 0.24),
+  levelup: (c) => arpeggio(c, [392, 523, 659, 784, 1047], 0.09, 0.14, "triangle", 0.24),
+  reward: (c) => arpeggio(c, [659, 784, 988, 1319], 0.1, 0.16, "triangle", 0.24),
   purchase: (c) => {
-    tone(c, 260, 0.08, { type: 'triangle', gain: 0.22, to: 180 });
-    tone(c, 1200, 0.08, { type: 'sine', gain: 0.2, delay: 0.07 });
-    tone(c, 1600, 0.2, { type: 'sine', gain: 0.2, delay: 0.14 });
+    tone(c, 260, 0.08, { type: "triangle", gain: 0.22, to: 180 });
+    tone(c, 1200, 0.08, { type: "sine", gain: 0.2, delay: 0.07 });
+    tone(c, 1600, 0.2, { type: "sine", gain: 0.2, delay: 0.14 });
   },
   equip: (c) => {
-    tone(c, 600, 0.07, { type: 'triangle', gain: 0.2 });
-    tone(c, 900, 0.1, { type: 'triangle', gain: 0.2, delay: 0.06 });
+    tone(c, 600, 0.07, { type: "triangle", gain: 0.2 });
+    tone(c, 900, 0.1, { type: "triangle", gain: 0.2, delay: 0.06 });
   },
   error: (c) => {
-    tone(c, 190, 0.16, { type: 'sawtooth', gain: 0.16 });
-    tone(c, 150, 0.22, { type: 'sawtooth', gain: 0.16, delay: 0.12 });
+    tone(c, 190, 0.16, { type: "sawtooth", gain: 0.16 });
+    tone(c, 150, 0.22, { type: "sawtooth", gain: 0.16, delay: 0.12 });
   },
 };
 
@@ -225,8 +254,10 @@ export function sfx(name: SfxName): void {
   }
 }
 
-const CLICKABLE = 'button, [role="button"], [role="tab"], [role="radio"], [role="switch"], input[type="checkbox"], input[type="radio"], a[href]';
-const SELECTABLE = '[role="tab"], [role="radio"], [role="switch"], input[type="checkbox"], input[type="radio"]';
+const CLICKABLE =
+  'button, [role="button"], [role="tab"], [role="radio"], [role="switch"], input[type="checkbox"], input[type="radio"], a[href]';
+const SELECTABLE =
+  '[role="tab"], [role="radio"], [role="switch"], input[type="checkbox"], input[type="radio"]';
 
 /**
  * Menu sounds for the whole app from two document-level hooks: a click on any button
@@ -236,22 +267,27 @@ const SELECTABLE = '[role="tab"], [role="radio"], [role="switch"], input[type="c
 export function installUiSounds(): () => void {
   const onClick = (e: MouseEvent) => {
     const el = (e.target as Element | null)?.closest?.(CLICKABLE);
-    if (!el || (el as HTMLButtonElement).disabled || el.getAttribute('aria-disabled') === 'true') return;
-    sfx(el.matches(SELECTABLE) ? 'select' : 'click');
+    if (!el || (el as HTMLButtonElement).disabled || el.getAttribute("aria-disabled") === "true")
+      return;
+    sfx(el.matches(SELECTABLE) ? "select" : "click");
   };
-  document.addEventListener('click', onClick, true);
+  document.addEventListener("click", onClick, true);
 
   const observer = new MutationObserver((records) => {
     for (const r of records) {
       for (const n of r.addedNodes) {
-        if (n instanceof Element && (n.matches('[role="dialog"]') || n.querySelector('[role="dialog"]'))) return sfx('open');
+        if (
+          n instanceof Element &&
+          (n.matches('[role="dialog"]') || n.querySelector('[role="dialog"]'))
+        )
+          return sfx("open");
       }
     }
   });
   observer.observe(document.body, { childList: true, subtree: true });
 
   return () => {
-    document.removeEventListener('click', onClick, true);
+    document.removeEventListener("click", onClick, true);
     observer.disconnect();
   };
 }

@@ -1,8 +1,15 @@
-import { Room, type Client } from '@colyseus/core';
-import { verifyPlayerToken } from '@snake/auth';
-import type { SimConfig } from '@snake/game-core';
-import { DEFAULT_MODE, ffa, modeConfig, modeForRoom, queueRoomName, type GameMode } from '@snake/game-modes';
-import { DEFAULT_SKIN, PUBLIC_SKINS, sanitizeName, type MatchReport } from '@snake/meta';
+import { Room, type Client } from "@colyseus/core";
+import { verifyPlayerToken } from "@snake/auth";
+import type { SimConfig } from "@snake/game-core";
+import {
+  DEFAULT_MODE,
+  ffa,
+  modeConfig,
+  modeForRoom,
+  queueRoomName,
+  type GameMode,
+} from "@snake/game-modes";
+import { DEFAULT_SKIN, PUBLIC_SKINS, sanitizeName, type MatchReport } from "@snake/meta";
 import {
   MATCH_MESSAGE,
   MAX_SNAKES,
@@ -19,11 +26,11 @@ import {
   type MatchPhase,
   type RosterEntry,
   type SettingsMsg,
-} from '@snake/protocol';
-import { Match } from './Match';
-import { QUEUE_SECRET } from './matchmaking';
-import { HttpMetaService, type MetaService } from './meta';
-import { botNames, roomCode } from './names';
+} from "@snake/protocol";
+import { Match } from "./Match";
+import { QUEUE_SECRET } from "./matchmaking";
+import { HttpMetaService, type MetaService } from "./meta";
+import { botNames, roomCode } from "./names";
 
 export interface ArenaOptions {
   /** Private rooms get a short code, never take matchmaking traffic, and start when the host says so. */
@@ -92,7 +99,7 @@ export class ArenaRoom extends Room {
   private cfg: SimConfig = modeConfig(DEFAULT_MODE);
   private isPrivate = false;
   private privateBots = DEFAULT_PRIVATE_BOTS;
-  private phase: MatchPhase = 'waiting';
+  private phase: MatchPhase = "waiting";
   private phaseEndsAt: number | null = null;
   private match: Match | null = null;
   private roster: RosterEntry[] = [];
@@ -111,10 +118,13 @@ export class ArenaRoom extends Room {
     this.cfg = modeConfig(this.mode);
     if (this.mode.ranked && !this.isPrivate) {
       // Public ranked rooms only come from the queue, and stay hidden from joinOrCreate.
-      if (options.queued !== QUEUE_SECRET) throw new Error(`join the '${queueRoomName(this.mode)}' queue instead`);
+      if (options.queued !== QUEUE_SECRET)
+        throw new Error(`join the '${queueRoomName(this.mode)}' queue instead`);
       void this.setPrivate(true);
     }
-    this.maxClients = this.isPrivate ? Math.min(this.mode.maxPrivateSnakes, ROOM_SIZE) : this.mode.maxPlayers;
+    this.maxClients = this.isPrivate
+      ? Math.min(this.mode.maxPrivateSnakes, ROOM_SIZE)
+      : this.mode.maxPlayers;
     this.privateBots = Math.min(DEFAULT_PRIVATE_BOTS, this.mode.maxPrivateSnakes - 1);
     if (this.isPrivate) {
       this.roomId = roomCode();
@@ -132,7 +142,10 @@ export class ArenaRoom extends Room {
     });
     this.onMessageBytes(Msg.Ping, (client, bytes: Uint8Array) => {
       try {
-        client.sendBytes(Msg.Pong, encodePong({ clientTime: decodePing(bytes), serverTime: now() }));
+        client.sendBytes(
+          Msg.Pong,
+          encodePong({ clientTime: decodePing(bytes), serverTime: now() }),
+        );
       } catch {
         // Malformed ping: ignore it.
       }
@@ -146,7 +159,7 @@ export class ArenaRoom extends Room {
     });
     this.onMessage(START_MESSAGE, (client) => {
       if (!this.isHostWaiting(client) || this.humans + this.botsForNextMatch() < 2) return;
-      this.setPhase('countdown', now() + timing.countdownMs);
+      this.setPhase("countdown", now() + timing.countdownMs);
     });
 
     this.setSimulationInterval(() => this.update(), 1000 / 60);
@@ -158,11 +171,12 @@ export class ArenaRoom extends Room {
   }
 
   override async onJoin(client: Client, options: JoinOptions = {}) {
-    const accountId: string | null = (client.auth as { accountId?: string | null } | undefined)?.accountId ?? null;
+    const accountId: string | null =
+      (client.auth as { accountId?: string | null } | undefined)?.accountId ?? null;
     const account = accountId ? await ArenaRoom.meta.lookupPlayer(accountId) : null;
     this.players.set(client.sessionId, {
       // The account's name wins over the typed one; skins only come from accounts.
-      name: account?.name ?? (sanitizeName(options.name) || 'Player'),
+      name: account?.name ?? (sanitizeName(options.name) || "Player"),
       accountId: account ? accountId : null,
       skin: account?.skin ?? DEFAULT_SKIN,
       snakeId: null,
@@ -188,7 +202,8 @@ export class ArenaRoom extends Room {
     const p = this.players.get(client.sessionId);
     if (p?.snakeId != null) this.match?.convertToBot(p.snakeId);
     this.players.delete(client.sessionId);
-    if (this.hostSession === client.sessionId) this.hostSession = this.players.keys().next().value ?? null;
+    if (this.hostSession === client.sessionId)
+      this.hostSession = this.players.keys().next().value ?? null;
     this.broadcastMatch();
   }
 
@@ -201,7 +216,7 @@ export class ArenaRoom extends Room {
    */
   override async onDispose() {
     const match = this.match;
-    if (this.phase === 'playing' && match && !this.reported) {
+    if (this.phase === "playing" && match && !this.reported) {
       this.reported = true;
       await this.reportResults(match, this.matchAccounts, { abandoned: true });
     }
@@ -216,46 +231,51 @@ export class ArenaRoom extends Room {
   }
 
   private isHostWaiting(client: Client): boolean {
-    return this.isPrivate && this.phase === 'waiting' && client.sessionId === this.hostSession;
+    return this.isPrivate && this.phase === "waiting" && client.sessionId === this.hostSession;
   }
 
   private botsForNextMatch(): number {
-    if (this.isPrivate) return Math.max(0, Math.min(this.privateBots, this.maxPrivateSnakes - this.humans));
+    if (this.isPrivate)
+      return Math.max(0, Math.min(this.privateBots, this.maxPrivateSnakes - this.humans));
     return Math.max(0, this.mode.maxPlayers - this.humans);
   }
 
   private update(): void {
     const t = now();
     switch (this.phase) {
-      case 'waiting':
+      case "waiting":
         // Private rooms wait for the host's start message.
-        if (!this.isPrivate && this.humans > 0) this.setPhase('countdown', t + timing.lobbyWaitMs);
+        if (!this.isPrivate && this.humans > 0) this.setPhase("countdown", t + timing.lobbyWaitMs);
         break;
-      case 'countdown':
+      case "countdown":
         if (this.humans === 0) {
-          this.setPhase('waiting', null);
+          this.setPhase("waiting", null);
         } else if (t >= this.phaseEndsAt!) {
           this.startMatch(t);
-        } else if (!this.isPrivate && this.humans >= this.mode.maxPlayers && this.phaseEndsAt! - t > timing.fullLobbyMs) {
-          this.setPhase('countdown', t + timing.fullLobbyMs); // full: no reason to wait
+        } else if (
+          !this.isPrivate &&
+          this.humans >= this.mode.maxPlayers &&
+          this.phaseEndsAt! - t > timing.fullLobbyMs
+        ) {
+          this.setPhase("countdown", t + timing.fullLobbyMs); // full: no reason to wait
         }
         break;
-      case 'playing':
+      case "playing":
         this.stepMatch(t);
         if (this.match!.finished) {
           this.winnerId = this.match!.state.winnerId;
-          this.setPhase('ended', t + timing.resultsMs);
+          this.setPhase("ended", t + timing.resultsMs);
           this.reported = true;
           void this.reportResults(this.match!, this.matchAccounts);
         }
         break;
-      case 'ended':
+      case "ended":
         this.stepMatch(t); // keeps snapshots flowing so the winner is still visible
         if (t >= this.phaseEndsAt!) {
           this.match = null;
           for (const p of this.players.values()) p.snakeId = null;
           if (!this.isPrivate) void this.unlock();
-          this.setPhase('waiting', null);
+          this.setPhase("waiting", null);
         }
         break;
     }
@@ -264,7 +284,10 @@ export class ArenaRoom extends Room {
   private startMatch(t: number): void {
     const humans = [...this.players.values()];
     const names = botNames(this.botsForNextMatch());
-    const specs = [...humans.map((p) => ({ name: p.name })), ...names.map((name) => ({ name, isBot: true }))];
+    const specs = [
+      ...humans.map((p) => ({ name: p.name })),
+      ...names.map((name) => ({ name, isBot: true })),
+    ];
     this.match = new Match(specs, this.cfg, t);
     this.reported = false;
     const skins = new Map<number, string>();
@@ -276,12 +299,17 @@ export class ArenaRoom extends Room {
       skins.set(id, p.skin);
       if (p.accountId) this.matchAccounts.set(id, p.accountId);
     });
-    this.roster = this.match.state.snakes.map((s) => ({ id: s.id, name: s.name, isBot: s.isBot, skin: skins.get(s.id) ?? randomSkin() }));
+    this.roster = this.match.state.snakes.map((s) => ({
+      id: s.id,
+      name: s.name,
+      isBot: s.isBot,
+      skin: skins.get(s.id) ?? randomSkin(),
+    }));
     this.winnerId = null;
     // Public rooms stop taking players mid-match, so matchmaking opens a fresh room.
     if (!this.isPrivate) void this.lock();
     this.broadcast(Msg.Events, encodeEvents(this.match.fullPellets()));
-    this.setPhase('playing', null);
+    this.setPhase("playing", null);
   }
 
   /**
@@ -289,7 +317,11 @@ export class ArenaRoom extends Room {
    * account holder still here what they got. Players who left are still paid.
    * An `abandoned` match (the room closed before it ended) is paid but never rated.
    */
-  private async reportResults(match: Match, accounts: Map<number, string>, { abandoned = false } = {}): Promise<void> {
+  private async reportResults(
+    match: Match,
+    accounts: Map<number, string>,
+    { abandoned = false } = {},
+  ): Promise<void> {
     if (accounts.size === 0) return;
     const report: MatchReport = {
       matchId: match.id,
@@ -298,7 +330,12 @@ export class ArenaRoom extends Room {
       results: match
         .results()
         .filter((r) => accounts.has(r.snakeId))
-        .map((r) => ({ playerId: accounts.get(r.snakeId)!, placement: r.placement, kills: r.kills, survivalMs: r.survivalMs })),
+        .map((r) => ({
+          playerId: accounts.get(r.snakeId)!,
+          placement: r.placement,
+          kills: r.kills,
+          survivalMs: r.survivalMs,
+        })),
     };
     const grants = await ArenaRoom.meta.reportMatch(report);
     for (const client of this.clients) {
@@ -311,7 +348,12 @@ export class ArenaRoom extends Room {
   /** Rated only when every snake was an account holder in a public room of a ranked mode. */
   private isRanked(match: Match, accounts: Map<number, string>): boolean {
     const snakes = match.state.snakes;
-    return this.mode.ranked && !this.isPrivate && snakes.length === 2 && snakes.every((s) => accounts.has(s.id));
+    return (
+      this.mode.ranked &&
+      !this.isPrivate &&
+      snakes.length === 2 &&
+      snakes.every((s) => accounts.has(s.id))
+    );
   }
 
   private stepMatch(t: number): void {
@@ -350,7 +392,11 @@ export class ArenaRoom extends Room {
         private: this.isPrivate,
         code: this.roomId,
         youAreHost: sessionId === this.hostSession,
-        players: [...this.players].map(([id, p]) => ({ name: p.name, host: id === this.hostSession, you: id === sessionId })),
+        players: [...this.players].map(([id, p]) => ({
+          name: p.name,
+          host: id === this.hostSession,
+          you: id === sessionId,
+        })),
         maxPlayers: this.maxClients,
         bots: this.botsForNextMatch(),
         mode: this.mode.id,

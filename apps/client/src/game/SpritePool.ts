@@ -1,13 +1,13 @@
-import { CanvasSource, Container, Sprite, Texture } from 'pixi.js';
+import { CanvasSource, Container, Sprite, Texture } from "pixi.js";
 
 /** Radius in texture pixels of the circle drawn into every round texture. */
 export const TEX_RADIUS = 60;
 const TEX_SIZE = 128;
 
 function circleTexture(draw: (ctx: CanvasRenderingContext2D, c: number) => void): Texture {
-  const canvas = document.createElement('canvas');
+  const canvas = document.createElement("canvas");
   canvas.width = canvas.height = TEX_SIZE;
-  draw(canvas.getContext('2d')!, TEX_SIZE / 2);
+  draw(canvas.getContext("2d")!, TEX_SIZE / 2);
   // Mipmaps keep small, zoomed-out circles smooth instead of shimmering.
   return new Texture({ source: new CanvasSource({ resource: canvas, autoGenerateMipmaps: true }) });
 }
@@ -26,17 +26,17 @@ export interface RoundTextures {
 
 export function makeRoundTextures(): RoundTextures {
   const disc = circleTexture((ctx, c) => {
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = "#fff";
     ctx.beginPath();
     ctx.arc(c, c, TEX_RADIUS, 0, Math.PI * 2);
     ctx.fill();
   });
   const body = circleTexture((ctx, c) => {
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = "#fff";
     ctx.beginPath();
     ctx.arc(c, c, TEX_RADIUS, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    ctx.strokeStyle = "rgba(0,0,0,0.6)";
     ctx.lineWidth = 7;
     ctx.beginPath();
     ctx.arc(c, c, TEX_RADIUS - 3.5, 0, Math.PI * 2);
@@ -66,7 +66,15 @@ export class SpritePool {
   }
 
   /** Places the next sprite, centred on (x, y), scaled and rotated. */
-  placeSprite(texture: Texture, x: number, y: number, scale: number, rotation: number, tint: number, alpha = 1): void {
+  placeSprite(
+    texture: Texture,
+    x: number,
+    y: number,
+    scale: number,
+    rotation: number,
+    tint: number,
+    alpha = 1,
+  ): void {
     const children = this.container.children as Sprite[];
     let s = children[this.used];
     if (!s) {

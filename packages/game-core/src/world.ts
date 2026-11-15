@@ -1,7 +1,7 @@
-import type { SimConfig } from './config';
-import { nextRandom } from './math';
-import { createSnake } from './snake';
-import type { GameState, Obstacle, Pellet, Snake } from './types';
+import type { SimConfig } from "./config";
+import { nextRandom } from "./math";
+import { createSnake } from "./snake";
+import type { GameState, Obstacle, Pellet, Snake } from "./types";
 
 export interface PlayerSpec {
   name: string;
@@ -50,10 +50,12 @@ function makeObstacles(state: GameState, cfg: SimConfig): Obstacle[] {
   for (let attempt = 0; rocks.length < want && attempt < want * 20; attempt++) {
     const a = random(state) * Math.PI * 2;
     const r = Math.sqrt(random(state)) * radius * 0.92;
-    const size = cfg.obstacleMinRadius + random(state) * (cfg.obstacleMaxRadius - cfg.obstacleMinRadius);
+    const size =
+      cfg.obstacleMinRadius + random(state) * (cfg.obstacleMaxRadius - cfg.obstacleMinRadius);
     const x = Math.cos(a) * r;
     const y = Math.sin(a) * r;
-    if (state.snakes.some((s) => Math.hypot(s.head.x - x, s.head.y - y) < SPAWN_CLEARANCE + size)) continue;
+    if (state.snakes.some((s) => Math.hypot(s.head.x - x, s.head.y - y) < SPAWN_CLEARANCE + size))
+      continue;
     if (rocks.some((o) => Math.hypot(o.x - x, o.y - y) < o.radius + size + ROCK_GAP)) continue;
     rocks.push({ x, y, radius: size });
   }
@@ -61,7 +63,12 @@ function makeObstacles(state: GameState, cfg: SimConfig): Obstacle[] {
 }
 
 /** True when a circle of `radius` at (x, y) overlaps a rock. */
-export function touchesObstacle(obstacles: readonly Obstacle[], x: number, y: number, radius: number): boolean {
+export function touchesObstacle(
+  obstacles: readonly Obstacle[],
+  x: number,
+  y: number,
+  radius: number,
+): boolean {
   for (const o of obstacles) {
     const r = o.radius + radius;
     if ((o.x - x) ** 2 + (o.y - y) ** 2 <= r * r) return true;

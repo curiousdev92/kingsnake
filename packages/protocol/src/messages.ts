@@ -1,5 +1,5 @@
-import type { SimConfig } from '@snake/game-core';
-import { ByteReader, ByteWriter } from './bytes';
+import type { SimConfig } from "@snake/game-core";
+import { ByteReader, ByteWriter } from "./bytes";
 
 /** Binary message types (Colyseus `sendBytes` / `onMessageBytes`). */
 export const Msg = {
@@ -14,7 +14,7 @@ export const Msg = {
 } as const;
 
 /** JSON message type for match lifecycle (not hot path). */
-export const MATCH_MESSAGE = 'match';
+export const MATCH_MESSAGE = "match";
 
 // Positions are 16-bit fixed point: 1/8 world unit, covering about +-4096 units.
 // The largest arena (16 players) has a radius of about 3100, centered on the origin.
@@ -22,9 +22,11 @@ const POS_SCALE = 8;
 const POS_MAX = 32767;
 const TAU = Math.PI * 2;
 
-export const quantizePos = (v: number) => Math.max(-POS_MAX, Math.min(POS_MAX, Math.round(v * POS_SCALE)));
+export const quantizePos = (v: number) =>
+  Math.max(-POS_MAX, Math.min(POS_MAX, Math.round(v * POS_SCALE)));
 export const dequantizePos = (q: number) => q / POS_SCALE;
-export const quantizeAngle = (a: number) => Math.round((((a % TAU) + TAU) % TAU) * (65536 / TAU)) & 0xffff;
+export const quantizeAngle = (a: number) =>
+  Math.round((((a % TAU) + TAU) % TAU) * (65536 / TAU)) & 0xffff;
 /** Returns an angle in (-PI, PI]. */
 export const dequantizeAngle = (q: number) => {
   const a = q * (TAU / 65536);
@@ -45,7 +47,11 @@ export interface InputMsg {
 }
 
 export function encodeInput(m: InputMsg): Uint8Array {
-  return new ByteWriter(8).u32(m.seq).u16(quantizeAngle(m.targetAngle)).u8(m.boost ? 1 : 0).finish();
+  return new ByteWriter(8)
+    .u32(m.seq)
+    .u16(quantizeAngle(m.targetAngle))
+    .u8(m.boost ? 1 : 0)
+    .finish();
 }
 
 export function decodeInput(bytes: Uint8Array): InputMsg {
@@ -63,7 +69,8 @@ export interface PongMsg {
   serverTime: number;
 }
 
-export const encodePong = (m: PongMsg) => new ByteWriter(16).f64(m.clientTime).f64(m.serverTime).finish();
+export const encodePong = (m: PongMsg) =>
+  new ByteWriter(16).f64(m.clientTime).f64(m.serverTime).finish();
 export function decodePong(bytes: Uint8Array): PongMsg {
   const r = new ByteReader(bytes);
   return { clientTime: r.f64(), serverTime: r.f64() };
@@ -96,7 +103,12 @@ const SNAKE_BODY = 2;
 
 export function encodeSnapshot(m: SnapshotMsg): Uint8Array {
   const w = new ByteWriter(64 + m.snakes.length * 16);
-  w.u32(m.tick).f64(m.serverTime).u32(m.lastSeq).f32(m.arenaRadius).f32(m.arenaTargetRadius).u8(m.snakes.length);
+  w.u32(m.tick)
+    .f64(m.serverTime)
+    .u32(m.lastSeq)
+    .f32(m.arenaRadius)
+    .f32(m.arenaTargetRadius)
+    .u8(m.snakes.length);
   for (const s of m.snakes) {
     w.u16(s.id)
       .u8((s.boosting ? SNAKE_BOOST : 0) | (s.body ? SNAKE_BODY : 0))
@@ -132,7 +144,8 @@ export function decodeSnapshot(bytes: Uint8Array): SnapshotMsg {
     if (flags & SNAKE_BODY) {
       const len = r.u16();
       body = [];
-      for (let k = 0; k < len; k++) body.push({ x: dequantizePos(r.i16()), y: dequantizePos(r.i16()) });
+      for (let k = 0; k < len; k++)
+        body.push({ x: dequantizePos(r.i16()), y: dequantizePos(r.i16()) });
     }
     snakes.push({ id, x, y, angle, mass, boosting: (flags & SNAKE_BOOST) !== 0, body });
   }
@@ -146,8 +159,8 @@ export interface PelletSnap {
   value: number;
 }
 
-export type DeathCause = 'body' | 'head' | 'arena' | 'rock';
-const CAUSES: DeathCause[] = ['body', 'head', 'arena', 'rock'];
+export type DeathCause = "body" | "head" | "arena" | "rock";
+const CAUSES: DeathCause[] = ["body", "head", "arena", "rock"];
 
 export interface DeathSnap {
   snakeId: number;
@@ -167,13 +180,18 @@ export interface EventsMsg {
 
 export function encodeEvents(m: EventsMsg): Uint8Array {
   const w = new ByteWriter(32 + m.added.length * 12 + m.removed.length * 4);
-  w.u32(m.tick).f64(m.serverTime).u8(m.reset ? 1 : 0);
+  w.u32(m.tick)
+    .f64(m.serverTime)
+    .u8(m.reset ? 1 : 0);
   w.u32(m.added.length);
   for (const p of m.added) w.u32(p.id).i16(quantizePos(p.x)).i16(quantizePos(p.y)).f32(p.value);
   w.u32(m.removed.length);
   for (const id of m.removed) w.u32(id);
   w.u8(m.deaths.length);
-  for (const d of m.deaths) w.u16(d.snakeId).u16(d.killerId ?? 0).u8(CAUSES.indexOf(d.cause));
+  for (const d of m.deaths)
+    w.u16(d.snakeId)
+      .u16(d.killerId ?? 0)
+      .u8(CAUSES.indexOf(d.cause));
   return w.finish();
 }
 
@@ -183,21 +201,31 @@ export function decodeEvents(bytes: Uint8Array): EventsMsg {
   const serverTime = r.f64();
   const reset = r.u8() === 1;
   const added: PelletSnap[] = [];
-  for (let i = r.u32(); i > 0; i--) added.push({ id: r.u32(), x: dequantizePos(r.i16()), y: dequantizePos(r.i16()), value: r.f32() });
+  for (let i = r.u32(); i > 0; i--)
+    added.push({
+      id: r.u32(),
+      x: dequantizePos(r.i16()),
+      y: dequantizePos(r.i16()),
+      value: r.f32(),
+    });
   const removed: number[] = [];
   for (let i = r.u32(); i > 0; i--) removed.push(r.u32());
   const deaths: DeathSnap[] = [];
   for (let i = r.u8(); i > 0; i--) {
     const snakeId = r.u16();
     const killer = r.u16();
-    deaths.push({ snakeId, killerId: killer === 0 ? null : killer, cause: CAUSES[r.u8()] ?? 'body' });
+    deaths.push({
+      snakeId,
+      killerId: killer === 0 ? null : killer,
+      cause: CAUSES[r.u8()] ?? "body",
+    });
   }
   return { tick, serverTime, reset, added, removed, deaths };
 }
 
 // ---------- match lifecycle (JSON) ----------
 
-export type MatchPhase = 'waiting' | 'countdown' | 'playing' | 'ended';
+export type MatchPhase = "waiting" | "countdown" | "playing" | "ended";
 
 export interface RosterEntry {
   id: number;
@@ -243,12 +271,12 @@ export interface MatchMsg {
 }
 
 /** Server -> client JSON message at match end with the account's rewards (a @snake/meta Grant). */
-export const REWARDS_MESSAGE = 'rewards';
+export const REWARDS_MESSAGE = "rewards";
 
 /** Ranked queue, server -> client JSON: you're waiting at this rating (QueueMsg). */
-export const QUEUE_MESSAGE = 'queue';
+export const QUEUE_MESSAGE = "queue";
 /** Ranked queue, server -> client: an opponent was found; the payload is a Colyseus seat reservation to consume. */
-export const MATCHED_MESSAGE = 'matched';
+export const MATCHED_MESSAGE = "matched";
 
 export interface QueueMsg {
   rating: number;
@@ -257,8 +285,8 @@ export interface QueueMsg {
 }
 
 /** Client -> server JSON messages for private-room hosts. */
-export const START_MESSAGE = 'start';
-export const SETTINGS_MESSAGE = 'settings';
+export const START_MESSAGE = "start";
+export const SETTINGS_MESSAGE = "settings";
 
 export interface SettingsMsg {
   bots: number;

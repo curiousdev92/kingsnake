@@ -7,18 +7,18 @@ description: Pick and run the smallest test/typecheck set for what changed in Ki
 
 Run only what the change can break. Get the changed paths from `git status --short`.
 
-| Changed | Run |
-|---|---|
-| `packages/game-core` | `@snake/game-core`, `@snake/protocol`, `@snake/netcode`, `@snake/game-modes`, `@snake/game-server` |
-| `packages/protocol` | `@snake/protocol`, `@snake/netcode`, `@snake/game-server` |
-| `packages/netcode` | `@snake/netcode` |
-| `packages/game-modes` | `@snake/game-modes`, `@snake/game-server` |
-| `packages/meta` | `@snake/meta`, `@snake/api`, `@snake/game-server` |
-| `packages/auth` | `@snake/auth`, `@snake/api`, `@snake/game-server` |
-| `packages/assets`, `ui-kit`, `design-tokens` | that package, then client typecheck |
-| `apps/api` | `@snake/api` |
-| `apps/game-server` | `@snake/game-server` |
-| `apps/client` | client typecheck, then the browser check below if the change is visible |
+| Changed                                      | Run                                                                                                |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `packages/game-core`                         | `@snake/game-core`, `@snake/protocol`, `@snake/netcode`, `@snake/game-modes`, `@snake/game-server` |
+| `packages/protocol`                          | `@snake/protocol`, `@snake/netcode`, `@snake/game-server`                                          |
+| `packages/netcode`                           | `@snake/netcode`                                                                                   |
+| `packages/game-modes`                        | `@snake/game-modes`, `@snake/game-server`                                                          |
+| `packages/meta`                              | `@snake/meta`, `@snake/api`, `@snake/game-server`                                                  |
+| `packages/auth`                              | `@snake/auth`, `@snake/api`, `@snake/game-server`                                                  |
+| `packages/assets`, `ui-kit`, `design-tokens` | that package, then client typecheck                                                                |
+| `apps/api`                                   | `@snake/api`                                                                                       |
+| `apps/game-server`                           | `@snake/game-server`                                                                               |
+| `apps/client`                                | client typecheck, then the browser check below if the change is visible                            |
 
 `@snake/client` and `@snake/design-tokens` have no test script. The client imports every package except `auth`, so also typecheck it when a shared package's exports change.
 

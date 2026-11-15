@@ -1,8 +1,8 @@
-import type { SimConfig } from './config';
-import { dist2, wrapAngle } from './math';
-import { SpatialHash } from './spatialHash';
-import type { GameState, Input, Pellet, Snake } from './types';
-import { touchesObstacle } from './world';
+import type { SimConfig } from "./config";
+import { dist2, wrapAngle } from "./math";
+import { SpatialHash } from "./spatialHash";
+import type { GameState, Input, Pellet, Snake } from "./types";
+import { touchesObstacle } from "./world";
 
 const CANDIDATES = 11;
 const SPREAD = 0.32; // radians between candidate headings
@@ -114,7 +114,11 @@ function hitsBody(state: GameState, bot: Snake, x: number, y: number): boolean {
 }
 
 /** Inputs for every living bot in the state. */
-export function botInputs(state: GameState, cfg: SimConfig, into = new Map<number, Input>()): Map<number, Input> {
+export function botInputs(
+  state: GameState,
+  cfg: SimConfig,
+  into = new Map<number, Input>(),
+): Map<number, Input> {
   for (const s of state.snakes) if (s.alive && s.isBot) into.set(s.id, botInput(state, s, cfg));
   return into;
 }

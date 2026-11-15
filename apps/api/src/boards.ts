@@ -1,7 +1,7 @@
-import type { ScoreBoard, ScoreEntry, Season } from '@snake/meta';
-import type { Db } from './db';
+import type { ScoreBoard, ScoreEntry, Season } from "@snake/meta";
+import type { Db } from "./db";
 
-type Row = Omit<ScoreEntry, 'you'> & { id: string };
+type Row = Omit<ScoreEntry, "you"> & { id: string };
 
 // Per-player totals over an optional [from, to) window. Ties share a rank.
 const totals = `
@@ -17,11 +17,15 @@ const totals = `
          (SELECT count(*)::int FROM totals x WHERE x.score > t.score) + 1 AS rank
   FROM totals t JOIN players p ON p.id = t.player_id`;
 
-const ORDER = 'ORDER BY t.score DESC, t.matches ASC, p.created_at ASC';
+const ORDER = "ORDER BY t.score DESC, t.matches ASC, p.created_at ASC";
 
 /** The best `limit` rows in board order (ties go to whoever needed fewer matches, then the older account). */
 async function topRows(db: Db, month: Season | null, limit: number): Promise<Row[]> {
-  return db.query<Row>(`${totals} ${ORDER} LIMIT $3`, [month?.startsAt ?? null, month?.endsAt ?? null, limit]);
+  return db.query<Row>(`${totals} ${ORDER} LIMIT $3`, [
+    month?.startsAt ?? null,
+    month?.endsAt ?? null,
+    limit,
+  ]);
 }
 
 /**
@@ -29,18 +33,36 @@ async function topRows(db: Db, month: Season | null, limit: number): Promise<Row
  * calendar month) or, with null, all time. Includes the viewer's own line when they are
  * below the top.
  */
-export async function scoreBoard(db: Db, month: Season | null, viewerId: string | null, limit = 50): Promise<ScoreBoard> {
+export async function scoreBoard(
+  db: Db,
+  month: Season | null,
+  viewerId: string | null,
+  limit = 50,
+): Promise<ScoreBoard> {
   const entry = ({ id, ...r }: Row): ScoreEntry => ({ ...r, you: id === viewerId });
   const top = (await topRows(db, month, limit)).map(entry);
   let you = top.find((e) => e.you) ?? null;
   if (!you && viewerId) {
-    const [mine] = await db.query<Row>(`${totals} WHERE p.id = $3`, [month?.startsAt ?? null, month?.endsAt ?? null, viewerId]);
+    const [mine] = await db.query<Row>(`${totals} WHERE p.id = $3`, [
+      month?.startsAt ?? null,
+      month?.endsAt ?? null,
+      viewerId,
+    ]);
     you = mine ? entry(mine) : null;
   }
-  return { kind: month ? 'monthly' : 'overall', season: month, top, you };
+  return { kind: month ? "monthly" : "overall", season: month, top, you };
 }
 
 /** The month's first `count` finishers by board position (1 = first), one player each, ties already broken. */
-export async function monthlyWinners(db: Db, month: Season, count: number): Promise<{ position: number; id: string; name: string; score: number }[]> {
-  return (await topRows(db, month, count)).map((r, i) => ({ position: i + 1, id: r.id, name: r.name, score: r.score }));
+export async function monthlyWinners(
+  db: Db,
+  month: Season,
+  count: number,
+): Promise<{ position: number; id: string; name: string; score: number }[]> {
+  return (await topRows(db, month, count)).map((r, i) => ({
+    position: i + 1,
+    id: r.id,
+    name: r.name,
+    score: r.score,
+  }));
 }

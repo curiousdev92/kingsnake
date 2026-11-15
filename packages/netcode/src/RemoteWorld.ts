@@ -6,9 +6,9 @@ import {
   type Pellet,
   type SimConfig,
   type Vec2,
-} from '@snake/game-core';
-import type { DeathSnap, EventsMsg, SnapshotMsg } from '@snake/protocol';
-import { SnapshotBuffer, type Sampled } from './SnapshotBuffer';
+} from "@snake/game-core";
+import type { DeathSnap, EventsMsg, SnapshotMsg } from "@snake/protocol";
+import { SnapshotBuffer, type Sampled } from "./SnapshotBuffer";
 
 /** A snake as seen by the client at one snapshot. Shape-compatible with game-core's Snake for rendering. */
 export interface ViewSnake {
@@ -104,7 +104,11 @@ export class RemoteWorld {
       serverTime: msg.serverTime,
       lastSeq: msg.lastSeq,
       snakes,
-      arena: { center: { x: 0, y: 0 }, radius: msg.arenaRadius, targetRadius: msg.arenaTargetRadius },
+      arena: {
+        center: { x: 0, y: 0 },
+        radius: msg.arenaRadius,
+        targetRadius: msg.arenaTargetRadius,
+      },
     });
     return true;
   }

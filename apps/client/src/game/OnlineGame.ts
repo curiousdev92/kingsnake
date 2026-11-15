@@ -1,8 +1,16 @@
-import { Client, type Room } from '@colyseus/sdk';
-import { makeConfig } from '@snake/game-core';
-import { getMode, queueRoomName } from '@snake/game-modes';
-import type { Grant } from '@snake/meta';
-import { AdaptiveDelay, ClockSync, NetworkSimulator, Predictor, RemoteWorld, type NetConditions, type ViewSnake } from '@snake/netcode';
+import { Client, type Room } from "@colyseus/sdk";
+import { makeConfig } from "@snake/game-core";
+import { getMode, queueRoomName } from "@snake/game-modes";
+import type { Grant } from "@snake/meta";
+import {
+  AdaptiveDelay,
+  ClockSync,
+  NetworkSimulator,
+  Predictor,
+  RemoteWorld,
+  type NetConditions,
+  type ViewSnake,
+} from "@snake/netcode";
 import {
   MATCH_MESSAGE,
   Msg,
@@ -21,11 +29,11 @@ import {
   type LobbyInfo,
   type MatchPhase,
   type SnapshotMsg,
-} from '@snake/protocol';
-import { PlayerInput } from './PlayerInput';
-import { haptic } from '../haptics';
-import { sfx } from '../sound';
-import type { Renderer } from './Renderer';
+} from "@snake/protocol";
+import { PlayerInput } from "./PlayerInput";
+import { haptic } from "../haptics";
+import { sfx } from "../sound";
+import type { Renderer } from "./Renderer";
 
 const INPUT_INTERVAL_MS = 1000 / 30;
 /** How often the net timer wakes; client ticks are counted from the clock, not from wakeups. */
@@ -34,7 +42,10 @@ const PING_INTERVAL_MS = 1000;
 const STATS_INTERVAL_MS = 100;
 
 /** How to get into a room: matchmaking or a new private room (by mode id), or a private room's code. */
-export type JoinRequest = { kind: 'quick'; mode: string } | { kind: 'create'; mode: string } | { kind: 'code'; code: string };
+export type JoinRequest =
+  | { kind: "quick"; mode: string }
+  | { kind: "create"; mode: string }
+  | { kind: "code"; code: string };
 
 export interface OnlineOptions {
   url: string;
@@ -70,7 +81,7 @@ export interface DeathStats {
 
 export interface OnlineStats {
   /** 'searching': waiting in a ranked queue for an opponent (see `queue`). */
-  connection: 'connecting' | 'searching' | 'connected' | 'closed' | 'error';
+  connection: "connecting" | "searching" | "connected" | "closed" | "error";
   /** While searching: your rating and seconds waited. */
   queue: { rating: number; seconds: number } | null;
   error: string | null;
@@ -147,8 +158,13 @@ export class OnlineGame {
   private lastOwnMass = 0;
   private lastTickSecond: number | null = null;
   private snakesNow: ViewSnake[] = [];
-  private lastSample: { mass: number; alive: number; you: boolean; extrapolating: boolean } = { mass: 0, alive: 0, you: false, extrapolating: false };
-  private connection: OnlineStats['connection'] = 'connecting';
+  private lastSample: { mass: number; alive: number; you: boolean; extrapolating: boolean } = {
+    mass: 0,
+    alive: 0,
+    you: false,
+    extrapolating: false,
+  };
+  private connection: OnlineStats["connection"] = "connecting";
   private queueRoom: Room | null = null;
   private queueInfo: { rating: number; since: number } | null = null;
   private error: string | null = null;
@@ -198,13 +214,13 @@ export class OnlineGame {
       const client = new Client(this.opts.url);
       const join = this.opts.join;
       const options = { name: this.opts.name, token: this.opts.token ?? undefined };
-      const mode = join.kind === 'code' ? null : getMode(join.mode);
-      const queue = join.kind === 'quick' && mode ? queueRoomName(mode) : null;
+      const mode = join.kind === "code" ? null : getMode(join.mode);
+      const queue = join.kind === "quick" && mode ? queueRoomName(mode) : null;
       const room = queue
         ? await this.searchOpponent(client, queue, options)
-        : join.kind === 'quick'
+        : join.kind === "quick"
           ? await client.joinOrCreate(mode!.room, options)
-          : join.kind === 'create'
+          : join.kind === "create"
             ? await client.create(mode!.room, { ...options, private: true })
             : await client.joinById(join.code, options);
       if (!room) return;
@@ -213,7 +229,7 @@ export class OnlineGame {
         return;
       }
       this.room = room;
-      this.connection = 'connected';
+      this.connection = "connected";
 
       // Copy payloads: the simulator delivers them later, after the transport may reuse the buffer.
       room.onMessage(Msg.Snapshot, (bytes: Uint8Array) => {
@@ -237,29 +253,31 @@ export class OnlineGame {
           this.clock.addSample(pong.clientTime, pong.serverTime, performance.now());
         }, false);
       });
-      room.onMessage(MATCH_MESSAGE, (m: MatchMsg) => this.down.deliver(() => this.onMatch(m), true));
+      room.onMessage(MATCH_MESSAGE, (m: MatchMsg) =>
+        this.down.deliver(() => this.onMatch(m), true),
+      );
       room.onMessage(REWARDS_MESSAGE, (g: Grant) =>
         this.down.deliver(() => {
           this.rewards = g;
-          sfx(g.levelAfter > g.levelBefore ? 'levelup' : 'coin');
+          sfx(g.levelAfter > g.levelBefore ? "levelup" : "coin");
           this.opts.onRewards?.(g);
         }, true),
       );
       room.onLeave((code) => {
-        this.connection = 'closed';
+        this.connection = "closed";
         this.error = `Disconnected (${code})`;
       });
       room.onError((code, message) => {
-        this.connection = 'error';
+        this.connection = "error";
         this.error = message ?? `Error ${code}`;
       });
     } catch (e) {
-      this.connection = 'error';
+      this.connection = "error";
       const message = e instanceof Error ? e.message : String(e);
       const join = this.opts.join;
       // A bad or locked code comes back as a matchmaking error; a dead server as a fetch failure.
       this.error =
-        join.kind === 'code' && /not found|locked/i.test(message)
+        join.kind === "code" && /not found|locked/i.test(message)
           ? `No open room with code ${join.code}`
           : `Could not reach ${this.opts.url}: ${message}`;
     }
@@ -267,7 +285,8 @@ export class OnlineGame {
 
   private onSnapshot(msg: SnapshotMsg): void {
     if (!this.world.applySnapshot(msg)) return;
-    if (this.clock.synced) this.adaptive.addSample(this.clock.serverNow(performance.now()) - msg.serverTime);
+    if (this.clock.synced)
+      this.adaptive.addSample(this.clock.serverNow(performance.now()) - msg.serverTime);
 
     const you = this.match?.you ?? null;
     if (you === null) return;
@@ -278,7 +297,12 @@ export class OnlineGame {
     }
     // First snapshot of this life: steer along the spawn heading until the player aims.
     if (!this.predictor.active) this.player.resetAim(own.angle);
-    this.predictor.reconcile({ snake: own, path: this.world.pathOf(you)!, arenaRadius: msg.arenaRadius, lastSeq: msg.lastSeq });
+    this.predictor.reconcile({
+      snake: own,
+      path: this.world.pathOf(you)!,
+      arenaRadius: msg.arenaRadius,
+      lastSeq: msg.lastSeq,
+    });
   }
 
   private onMatch(m: MatchMsg): void {
@@ -289,13 +313,13 @@ export class OnlineGame {
     if (m.phase !== prev?.phase || m.you !== prev?.you) this.predictor.reset();
     // Match start and result sounds, once per phase change.
     if (m.phase !== prev?.phase) {
-      if (m.phase === 'playing' && m.you !== null) sfx('go');
-      if (m.phase === 'ended' && m.you !== null && m.winnerId === m.you) {
-        haptic('win');
-        sfx('win');
+      if (m.phase === "playing" && m.you !== null) sfx("go");
+      if (m.phase === "ended" && m.you !== null && m.winnerId === m.you) {
+        haptic("win");
+        sfx("win");
       }
     }
-    if (m.phase === 'playing' && prev?.phase !== 'playing') {
+    if (m.phase === "playing" && prev?.phase !== "playing") {
       this.placement = 0;
       this.deathReason = null;
       this.rewards = null;
@@ -307,7 +331,7 @@ export class OnlineGame {
       this.playStartAt = performance.now();
       this.renderer.setSkins(new Map(m.roster.map((r) => [r.id, r.skin])));
     }
-    if (m.phase === 'waiting' || m.phase === 'countdown') this.world.buffer.clear();
+    if (m.phase === "waiting" || m.phase === "countdown") this.world.buffer.clear();
   }
 
   private count(bytes: number, snapshot: boolean): void {
@@ -337,7 +361,7 @@ export class OnlineGame {
   }
 
   private clientTick(): void {
-    if (this.match?.phase !== 'playing' || this.match.you === null) return;
+    if (this.match?.phase !== "playing" || this.match.you === null) return;
     const input = this.player.sample();
     const seq = ++this.seq;
     this.send(Msg.Input, encodeInput({ seq, targetAngle: input.targetAngle, boost: input.boost }));
@@ -352,23 +376,23 @@ export class OnlineGame {
     const you = this.match?.you ?? null;
     for (const d of this.world.applyEventsUntil(renderTime)) {
       if (you !== null && d.killerId === you && d.snakeId !== you) {
-        haptic('kill');
-        sfx('kill');
+        haptic("kill");
+        sfx("kill");
         this.kills++;
       }
       if (d.snakeId !== you) continue;
-      haptic('death');
-      sfx('death');
+      haptic("death");
+      sfx("death");
       this.survivedMs = performance.now() - this.playStartAt;
       this.deathMass = this.lastOwnMass;
       this.placement = (this.world.buffer.latest?.snakes.length ?? 0) + 1;
-      const killer = this.match?.roster.find((r) => r.id === d.killerId)?.name ?? 'someone';
+      const killer = this.match?.roster.find((r) => r.id === d.killerId)?.name ?? "someone";
       this.deathReason =
-        d.cause === 'arena'
-          ? 'left the arena'
-          : d.cause === 'rock'
-            ? 'hit a rock'
-            : d.cause === 'head'
+        d.cause === "arena"
+          ? "left the arena"
+          : d.cause === "rock"
+            ? "hit a rock"
+            : d.cause === "head"
               ? `hit ${killer} head-on`
               : `ran into ${killer}`;
     }
@@ -401,26 +425,43 @@ export class OnlineGame {
       this.lastOwnMass = me.mass;
     }
     // After death the camera holds where we died; only late joiners (no snake) follow the biggest one.
-    const focus = you ?? ([...s.b.snakes].sort((x, y) => y.mass - x.mass)[0]?.id ?? null);
+    const focus = you ?? [...s.b.snakes].sort((x, y) => y.mass - x.mass)[0]?.id ?? null;
     this.renderer.render(a, b, s.t, focus);
-    this.lastSample = { mass: me?.mass ?? 0, alive: s.b.snakes.length, you: !!me, extrapolating: s.extrapolating };
+    this.lastSample = {
+      mass: me?.mass ?? 0,
+      alive: s.b.snakes.length,
+      you: !!me,
+      extrapolating: s.extrapolating,
+    };
   }
 
   private nameOf(id: number): string {
-    return this.match?.roster.find((r) => r.id === id)?.name ?? 'Snake';
+    return this.match?.roster.find((r) => r.id === id)?.name ?? "Snake";
   }
 
   /** Top 5 living snakes by mass, then the local player if they are ranked lower or already out. */
   private standings(): StandingRow[] {
     const m = this.match;
-    if (!m || (m.phase !== 'playing' && m.phase !== 'ended')) return [];
+    if (!m || (m.phase !== "playing" && m.phase !== "ended")) return [];
     const ranked = [...this.snakesNow].sort((a, b) => b.mass - a.mass);
-    const row = (s: ViewSnake, i: number): StandingRow => ({ rank: i + 1, name: this.nameOf(s.id), mass: Math.round(s.mass), you: s.id === m.you });
+    const row = (s: ViewSnake, i: number): StandingRow => ({
+      rank: i + 1,
+      name: this.nameOf(s.id),
+      mass: Math.round(s.mass),
+      you: s.id === m.you,
+    });
     const rows = ranked.slice(0, 5).map(row);
     if (m.you !== null && !rows.some((r) => r.you)) {
       const i = ranked.findIndex((s) => s.id === m.you);
       if (i >= 0) rows.push(row(ranked[i]!, i));
-      else if (this.placement > 0) rows.push({ rank: this.placement, name: this.nameOf(m.you), mass: Math.round(this.deathMass), you: true, out: true });
+      else if (this.placement > 0)
+        rows.push({
+          rank: this.placement,
+          name: this.nameOf(m.you),
+          mass: Math.round(this.deathMass),
+          you: true,
+          out: true,
+        });
     }
     return rows;
   }
@@ -444,22 +485,39 @@ export class OnlineGame {
     const m = this.match;
     const serverNow = this.clock.serverNow(now);
     // Tick for each of the last three countdown seconds.
-    const secondsLeft = m?.phaseEndsAt != null && this.clock.synced ? Math.max(0, Math.ceil((m.phaseEndsAt - serverNow) / 1000)) : null;
-    if (m?.phase === 'countdown' && secondsLeft !== null && secondsLeft >= 1 && secondsLeft <= 3 && secondsLeft !== this.lastTickSecond) sfx('tick');
-    this.lastTickSecond = m?.phase === 'countdown' ? secondsLeft : null;
+    const secondsLeft =
+      m?.phaseEndsAt != null && this.clock.synced
+        ? Math.max(0, Math.ceil((m.phaseEndsAt - serverNow) / 1000))
+        : null;
+    if (
+      m?.phase === "countdown" &&
+      secondsLeft !== null &&
+      secondsLeft >= 1 &&
+      secondsLeft <= 3 &&
+      secondsLeft !== this.lastTickSecond
+    )
+      sfx("tick");
+    this.lastTickSecond = m?.phase === "countdown" ? secondsLeft : null;
     this.onStats({
       connection: this.connection,
-      queue: this.queueInfo && { rating: this.queueInfo.rating, seconds: Math.floor((now - this.queueInfo.since) / 1000) },
+      queue: this.queueInfo && {
+        rating: this.queueInfo.rating,
+        seconds: Math.floor((now - this.queueInfo.since) / 1000),
+      },
       error: this.error,
-      phase: m?.phase ?? 'waiting',
-      phaseSecondsLeft: m?.phaseEndsAt != null && this.clock.synced ? Math.max(0, Math.ceil((m.phaseEndsAt - serverNow) / 1000)) : null,
+      phase: m?.phase ?? "waiting",
+      phaseSecondsLeft:
+        m?.phaseEndsAt != null && this.clock.synced
+          ? Math.max(0, Math.ceil((m.phaseEndsAt - serverNow) / 1000))
+          : null,
       lobby: m?.lobby ?? null,
       you: m?.you ?? null,
       youAlive: this.lastSample.you,
       placement: this.placement,
       deathReason: this.deathReason,
       rewards: this.rewards,
-      winnerName: m?.winnerId != null ? (m.roster.find((r) => r.id === m.winnerId)?.name ?? null) : null,
+      winnerName:
+        m?.winnerId != null ? (m.roster.find((r) => r.id === m.winnerId)?.name ?? null) : null,
       mass: Math.round(this.lastSample.mass),
       alive: this.lastSample.alive,
       total: m?.roster.length ?? 0,
@@ -471,7 +529,10 @@ export class OnlineGame {
       buffered: this.world.buffer.size,
       extrapolating: this.lastSample.extrapolating,
       interpMs: Math.round(this.interpDelayMs),
-      predErr: this.predict && this.predictor.active ? Math.round(this.predictor.lastError * 10) / 10 : null,
+      predErr:
+        this.predict && this.predictor.active
+          ? Math.round(this.predictor.lastError * 10) / 10
+          : null,
       predSnaps: this.predictor.snaps,
     });
   }
@@ -480,21 +541,30 @@ export class OnlineGame {
    * Ranked: waits in the mode's queue until it pairs us by rating, then takes the seat
    * it reserved in the match room. Null if the game was closed while searching.
    */
-  private async searchOpponent(client: Client, queueName: string, options: object): Promise<Room | null> {
+  private async searchOpponent(
+    client: Client,
+    queueName: string,
+    options: object,
+  ): Promise<Room | null> {
     const queue = await client.joinOrCreate(queueName, options);
     this.queueRoom = queue;
-    this.connection = 'searching';
+    this.connection = "searching";
     const since = performance.now();
-    const seat = await new Promise<Parameters<Client['consumeSeatReservation']>[0]>((resolve, reject) => {
-      queue.onMessage(QUEUE_MESSAGE, (m: QueueMsg) => (this.queueInfo = { rating: m.rating, since }));
-      queue.onMessage(MATCHED_MESSAGE, resolve);
-      queue.onLeave(() => reject(new Error('Lost the matchmaking queue')));
-    });
+    const seat = await new Promise<Parameters<Client["consumeSeatReservation"]>[0]>(
+      (resolve, reject) => {
+        queue.onMessage(
+          QUEUE_MESSAGE,
+          (m: QueueMsg) => (this.queueInfo = { rating: m.rating, since }),
+        );
+        queue.onMessage(MATCHED_MESSAGE, resolve);
+        queue.onLeave(() => reject(new Error("Lost the matchmaking queue")));
+      },
+    );
     this.queueRoom = null;
     this.queueInfo = null;
     void queue.leave();
     if (this.destroyed) return null;
-    this.connection = 'connecting';
+    this.connection = "connecting";
     return client.consumeSeatReservation(seat);
   }
 

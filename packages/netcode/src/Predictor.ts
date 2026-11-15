@@ -8,9 +8,9 @@ import {
   type SimConfig,
   type Snake,
   type Vec2,
-} from '@snake/game-core';
-import type { SnakeSnap } from '@snake/protocol';
-import type { ViewSnake } from './RemoteWorld';
+} from "@snake/game-core";
+import type { SnakeSnap } from "@snake/protocol";
+import type { ViewSnake } from "./RemoteWorld";
 
 /** History of unacknowledged inputs kept for replay (~4 s at 30 Hz). */
 const MAX_PENDING = 120;
@@ -85,7 +85,8 @@ export class Predictor {
 
   reconcile(base: ReconcileBase): void {
     // Drop what the server has applied; remember the newest of those as the steering it holds.
-    while (this.pending.length > 0 && this.pending[0]!.seq <= base.lastSeq) this.lastAcked = this.pending.shift()!.input;
+    while (this.pending.length > 0 && this.pending[0]!.seq <= base.lastSeq)
+      this.lastAcked = this.pending.shift()!.input;
 
     let state = this.baseState(base);
     let before = state;
@@ -127,7 +128,10 @@ export class Predictor {
     const t = Math.max(0, Math.min(1, alpha));
     const ox = this.offset.x;
     const oy = this.offset.y;
-    const lerp = (p: Vec2, q: Vec2): Vec2 => ({ x: p.x + (q.x - p.x) * t + ox, y: p.y + (q.y - p.y) * t + oy });
+    const lerp = (p: Vec2, q: Vec2): Vec2 => ({
+      x: p.x + (q.x - p.x) * t + ox,
+      y: p.y + (q.y - p.y) * t + oy,
+    });
     const da = Math.atan2(Math.sin(b.angle - a.angle), Math.cos(b.angle - a.angle));
     return {
       id: b.id,
@@ -154,7 +158,7 @@ export class Predictor {
     const length = bodyLengthForMass(s.mass, cfg);
     const snake: Snake = {
       id: s.id,
-      name: '',
+      name: "",
       isBot: false,
       head: { x: s.x, y: s.y },
       angle: s.angle,

@@ -1,10 +1,10 @@
-import { makeConfig, type SimConfig } from '@snake/game-core';
-import { battleRoyale } from './battleRoyale';
-import { duel } from './duel';
-import { ffa } from './ffa';
-import type { GameMode } from './types';
+import { makeConfig, type SimConfig } from "@snake/game-core";
+import { battleRoyale } from "./battleRoyale";
+import { duel } from "./duel";
+import { ffa } from "./ffa";
+import type { GameMode } from "./types";
 
-export type { GameMode } from './types';
+export type { GameMode } from "./types";
 export { battleRoyale, duel, ffa };
 
 /** Every playable mode, in menu order. A new mode is one file plus a line here. */

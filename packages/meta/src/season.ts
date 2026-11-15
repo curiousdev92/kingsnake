@@ -1,4 +1,4 @@
-import { START_RATING } from './rating';
+import { START_RATING } from "./rating";
 
 /**
  * Ranked seasons are calendar months (UTC). Each season has its own duel rating and
@@ -13,14 +13,27 @@ export interface Season {
   endsAt: string;
 }
 
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
 const SEASON_ID = /^(\d{4})-(\d{2})$/;
 
 function seasonFromMonth(year: number, month: number): Season {
   const start = new Date(Date.UTC(year, month, 1));
   const end = new Date(Date.UTC(year, month + 1, 1));
   return {
-    id: `${start.getUTCFullYear()}-${String(start.getUTCMonth() + 1).padStart(2, '0')}`,
+    id: `${start.getUTCFullYear()}-${String(start.getUTCMonth() + 1).padStart(2, "0")}`,
     name: `${MONTHS[start.getUTCMonth()]} ${start.getUTCFullYear()}`,
     startsAt: start.toISOString(),
     endsAt: end.toISOString(),
@@ -33,7 +46,7 @@ export function seasonAt(date: Date): Season {
 
 /** The season with this id, or null for malformed ids. */
 export function seasonById(id: unknown): Season | null {
-  const m = typeof id === 'string' ? SEASON_ID.exec(id) : null;
+  const m = typeof id === "string" ? SEASON_ID.exec(id) : null;
   if (!m) return null;
   const month = Number(m[2]) - 1;
   return month >= 0 && month < 12 ? seasonFromMonth(Number(m[1]), month) : null;
@@ -46,18 +59,25 @@ export function previousSeason(s: Season): Season {
 
 /** Soft reset: a new season starts halfway between last season's rating and the start rating. */
 export function seasonStartRating(lastSeasonRating: number | null): number {
-  return lastSeasonRating === null ? START_RATING : Math.round((lastSeasonRating + START_RATING) / 2);
+  return lastSeasonRating === null
+    ? START_RATING
+    : Math.round((lastSeasonRating + START_RATING) / 2);
 }
 
 /**
  * End-of-season game bonuses by final rating: coins, and for the top tiers an exclusive
  * skin too. Only players who played a ranked match get one.
  */
-export const SEASON_REWARD_TIERS: readonly { minRating: number; name: string; coins: number; skin?: string }[] = [
-  { minRating: 1500, name: 'Diamond', coins: 600, skin: 'diamond' },
-  { minRating: 1300, name: 'Gold', coins: 300, skin: 'gold' },
-  { minRating: 1100, name: 'Silver', coins: 150 },
-  { minRating: 0, name: 'Bronze', coins: 60 },
+export const SEASON_REWARD_TIERS: readonly {
+  minRating: number;
+  name: string;
+  coins: number;
+  skin?: string;
+}[] = [
+  { minRating: 1500, name: "Diamond", coins: 600, skin: "diamond" },
+  { minRating: 1300, name: "Gold", coins: 300, skin: "gold" },
+  { minRating: 1100, name: "Silver", coins: 150 },
+  { minRating: 0, name: "Bronze", coins: 60 },
 ];
 
 export function seasonTier(rating: number): { name: string; coins: number; skin?: string } {

@@ -67,7 +67,11 @@ export function utcDay(date: Date): string {
  * The streak after claiming today: it continues if the last claim was yesterday,
  * otherwise it starts again at 1. Returns null if today was already claimed.
  */
-export function nextStreak(lastClaimDay: string | null, streak: number, today: string): number | null {
+export function nextStreak(
+  lastClaimDay: string | null,
+  streak: number,
+  today: string,
+): number | null {
   if (lastClaimDay === today) return null;
   const yesterday = utcDay(new Date(Date.parse(`${today}T00:00:00Z`) - 86_400_000));
   return lastClaimDay === yesterday ? streak + 1 : 1;

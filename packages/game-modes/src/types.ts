@@ -1,4 +1,4 @@
-import type { SimConfig } from '@snake/game-core';
+import type { SimConfig } from "@snake/game-core";
 
 /**
  * A game mode is data: who plays and how the simulation is tuned. Rooms, netcode and

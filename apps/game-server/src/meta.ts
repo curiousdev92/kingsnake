@@ -1,5 +1,5 @@
-import { internalKey } from '@snake/auth';
-import { START_RATING, type Grant, type MatchReport } from '@snake/meta';
+import { internalKey } from "@snake/auth";
+import { START_RATING, type Grant, type MatchReport } from "@snake/meta";
 
 /** What the game-server needs from the meta API. Swappable for tests. */
 export interface MetaService {
@@ -14,14 +14,14 @@ const TIMEOUT_MS = 3000;
 /** Calls the API's `/internal/*` endpoints with the shared internal key. */
 export class HttpMetaService implements MetaService {
   constructor(
-    private readonly baseUrl = process.env.API_URL ?? 'http://localhost:3000',
+    private readonly baseUrl = process.env.API_URL ?? "http://localhost:3000",
     private readonly key = internalKey(),
   ) {}
 
   async lookupPlayer(playerId: string) {
     try {
       const res = await fetch(`${this.baseUrl}/internal/players/${encodeURIComponent(playerId)}`, {
-        headers: { 'x-internal-key': this.key },
+        headers: { "x-internal-key": this.key },
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
       if (!res.ok) return null;
@@ -37,8 +37,8 @@ export class HttpMetaService implements MetaService {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const res = await fetch(`${this.baseUrl}/internal/match-results`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', 'x-internal-key': this.key },
+          method: "POST",
+          headers: { "content-type": "application/json", "x-internal-key": this.key },
           body: JSON.stringify(report),
           signal: AbortSignal.timeout(TIMEOUT_MS),
         });

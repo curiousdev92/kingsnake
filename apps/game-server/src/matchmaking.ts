@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID } from "node:crypto";
 
 /**
  * Proves a room was created by the queue. Ranked rooms refuse to be created

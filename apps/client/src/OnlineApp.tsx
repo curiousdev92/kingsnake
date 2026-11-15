@@ -5,7 +5,12 @@ import { Button, Modal, Panel } from "@snake/ui-kit";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { create } from "zustand";
 import { refreshProfile, savedName, sessionToken, useAccount } from "./account";
-import { OnlineGame, type JoinRequest, type OnlineStats, type StandingRow } from "./game/OnlineGame";
+import {
+  OnlineGame,
+  type JoinRequest,
+  type OnlineStats,
+  type StandingRow,
+} from "./game/OnlineGame";
 import { Renderer } from "./game/Renderer";
 import { Home, normalizeCode } from "./Home";
 
@@ -189,7 +194,8 @@ function Hud() {
 /** Top 5 by mass; the local player is added below a gap when ranked lower or eliminated. */
 function Standings({ rows }: { rows: StandingRow[] }) {
   if (rows.length === 0) return null;
-  const gap = rows.length > 1 && rows[rows.length - 1]!.you && rows[rows.length - 1]!.rank > rows.length;
+  const gap =
+    rows.length > 1 && rows[rows.length - 1]!.you && rows[rows.length - 1]!.rank > rows.length;
   return (
     <Panel
       style={{
@@ -204,7 +210,9 @@ function Standings({ rows }: { rows: StandingRow[] }) {
       {rows.map((r, i) => (
         <div key={r.you ? "you" : r.rank}>
           {gap && i === rows.length - 1 && (
-            <div style={{ color: token("color.textMuted"), textAlign: "center", lineHeight: 1 }}>⋯</div>
+            <div style={{ color: token("color.textMuted"), textAlign: "center", lineHeight: 1 }}>
+              ⋯
+            </div>
           )}
           <div
             style={{
@@ -217,7 +225,12 @@ function Standings({ rows }: { rows: StandingRow[] }) {
           >
             <span style={{ width: 18, textAlign: "right" }}>{r.rank}</span>
             <span
-              style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+              style={{
+                flex: 1,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
             >
               {r.you ? `${r.name} (you)` : r.name}
             </span>
@@ -229,8 +242,7 @@ function Standings({ rows }: { rows: StandingRow[] }) {
   );
 }
 
-const formatTime = (sec: number) =>
-  `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+const formatTime = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 
 /** Shown once the local player dies: the game's numbers, and a way back to the main page. */
 function GameOverModal({ onLeave }: { onLeave: () => void }) {
@@ -255,9 +267,7 @@ function GameOverModal({ onLeave }: { onLeave: () => void }) {
   return (
     <Modal open={open} onClose={() => setHidden(true)} title="You died" width={380}>
       <div style={{ display: "grid", gap: token("space.md") }}>
-        <div style={{ color: token("color.textMuted") }}>
-          You {d.deathReason ?? "died"}
-        </div>
+        <div style={{ color: token("color.textMuted") }}>You {d.deathReason ?? "died"}</div>
         <div style={{ ...title, textAlign: "center" }}>
           #{d.placement} <span style={{ fontSize: token("font.sizeMd") }}>of {d.total}</span>
         </div>
@@ -618,22 +628,35 @@ function NetPanel({ game, onLeave }: { game: OnlineGame; onLeave: () => void }) 
       }}
     >
       <div style={{ display: "flex", gap: 8 }}>
-        <Button variant="secondary" onClick={requestLeave} style={{ fontSize: token("font.sizeSm") }}>
+        <Button
+          variant="secondary"
+          onClick={requestLeave}
+          style={{ fontSize: token("font.sizeSm") }}
+        >
           Leave
         </Button>
-        <Modal open={confirming && inMatch} onClose={() => setConfirming(false)} title="Leave the game?" width={380}>
+        <Modal
+          open={confirming && inMatch}
+          onClose={() => setConfirming(false)}
+          title="Leave the game?"
+          width={380}
+        >
           <div style={{ display: "grid", gap: token("space.md") }}>
             <div>If you leave now:</div>
             <ul style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 6 }}>
               <li>
-                You give up your run: your snake is taken over by a bot, and you can't win this match.
+                You give up your run: your snake is taken over by a bot, and you can't win this
+                match.
               </li>
               <li>
                 Your rewards use where you stand right now (about #{s?.alive} of {s?.total}) and the
                 time you survived, so you earn less XP and fewer coins than by playing on.
               </li>
               {ranked && (
-                <li>This is a ranked duel: the match carries on against a bot, and you will likely lose rating.</li>
+                <li>
+                  This is a ranked duel: the match carries on against a bot, and you will likely
+                  lose rating.
+                </li>
               )}
             </ul>
             <div style={{ display: "grid", gap: 8 }}>

@@ -1,18 +1,23 @@
-import { Capacitor } from '@capacitor/core';
-import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
+import { Capacitor } from "@capacitor/core";
+import { Haptics, ImpactStyle, NotificationType } from "@capacitor/haptics";
 
-export type HapticKind = 'eat' | 'kill' | 'death' | 'win';
+export type HapticKind = "eat" | "kill" | "death" | "win";
 
-const VIBRATE_MS: Record<HapticKind, number | number[]> = { eat: 8, kill: [20, 40, 20], death: 120, win: [30, 60, 30, 60, 30] };
+const VIBRATE_MS: Record<HapticKind, number | number[]> = {
+  eat: 8,
+  kill: [20, 40, 20],
+  death: 120,
+  win: [30, 60, 30, 60, 30],
+};
 const MIN_GAP_MS: Record<HapticKind, number> = { eat: 90, kill: 0, death: 0, win: 0 };
 const last: Partial<Record<HapticKind, number>> = {};
 
-const ENABLED_KEY = 'snake.vibration';
+const ENABLED_KEY = "snake.vibration";
 
 /** The player's Vibration setting (on unless turned off). */
 export function hapticsEnabled(): boolean {
   try {
-    return localStorage.getItem(ENABLED_KEY) !== 'off';
+    return localStorage.getItem(ENABLED_KEY) !== "off";
   } catch {
     return true;
   }
@@ -20,7 +25,7 @@ export function hapticsEnabled(): boolean {
 
 export function setHapticsEnabled(on: boolean): void {
   try {
-    localStorage.setItem(ENABLED_KEY, on ? 'on' : 'off');
+    localStorage.setItem(ENABLED_KEY, on ? "on" : "off");
   } catch {
     // applies until reload only
   }
@@ -41,9 +46,13 @@ export function haptic(kind: HapticKind): void {
   last[kind] = now;
   if (Capacitor.isNativePlatform()) {
     const p =
-      kind === 'eat' ? Haptics.impact({ style: ImpactStyle.Light })
-      : kind === 'kill' ? Haptics.impact({ style: ImpactStyle.Heavy })
-      : Haptics.notification({ type: kind === 'win' ? NotificationType.Success : NotificationType.Error });
+      kind === "eat"
+        ? Haptics.impact({ style: ImpactStyle.Light })
+        : kind === "kill"
+          ? Haptics.impact({ style: ImpactStyle.Heavy })
+          : Haptics.notification({
+              type: kind === "win" ? NotificationType.Success : NotificationType.Error,
+            });
     p.catch(() => {});
   } else {
     // Browsers reject (and log) vibration before the first user gesture.

@@ -1,4 +1,4 @@
-import type { Season } from './season';
+import type { Season } from "./season";
 
 /**
  * Prizes per leaderboard:
@@ -21,7 +21,7 @@ export function monthlyPrizeFor(rank: number): number | null {
 }
 
 /** 'unclaimed': won, no payout details yet. 'requested': details sent, waiting for payment. 'paid': done. */
-export type PrizeStatus = 'unclaimed' | 'requested' | 'paid';
+export type PrizeStatus = "unclaimed" | "requested" | "paid";
 
 /** A cash prize won on a finished month's board. */
 export interface MonthlyPrize {

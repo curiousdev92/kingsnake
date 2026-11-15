@@ -1,10 +1,10 @@
-import type { Vec2 } from '@snake/game-core';
-import { getSkin } from '@snake/meta';
-import { Application, Container, Graphics } from 'pixi.js';
-import { sfx } from '../sound';
-import { Effects } from './Effects';
-import { loadSkinTextures, SEGMENT_PX, type SkinTextures } from './skinTextures';
-import { makeRoundTextures, SpritePool } from './SpritePool';
+import type { Vec2 } from "@snake/game-core";
+import { getSkin } from "@snake/meta";
+import { Application, Container, Graphics } from "pixi.js";
+import { sfx } from "../sound";
+import { Effects } from "./Effects";
+import { loadSkinTextures, SEGMENT_PX, type SkinTextures } from "./skinTextures";
+import { makeRoundTextures, SpritePool } from "./SpritePool";
 
 /** A skin's palette as Pixi colours, banded along the body, plus its art once loaded. */
 interface Paint {
@@ -78,7 +78,7 @@ export class Renderer {
   private readonly grid = new Graphics();
   private readonly arena = new Graphics();
   private readonly rocks = new Graphics();
-  private rocksDrawn: RenderWorld['obstacles'] = undefined;
+  private rocksDrawn: RenderWorld["obstacles"] = undefined;
   private readonly textures = makeRoundTextures();
   private readonly pellets = new SpritePool(this.textures.disc);
   private readonly snakes = new SpritePool(this.textures.body);
@@ -99,7 +99,11 @@ export class Renderer {
     for (const [id, skinId] of skins) {
       const skin = getSkin(skinId);
       if (!skin) continue;
-      this.paints.set(id, { colors: skin.palette.map((c) => parseInt(c.slice(1), 16)), band: skin.band, skinId });
+      this.paints.set(id, {
+        colors: skin.palette.map((c) => parseInt(c.slice(1), 16)),
+        band: skin.band,
+        skinId,
+      });
       if (!this.art.has(skinId)) {
         void loadSkinTextures(skinId).then((tex) => {
           if (tex) this.art.set(skinId, tex);
@@ -117,7 +121,14 @@ export class Renderer {
       autoDensity: true,
     });
     host.appendChild(this.app.canvas);
-    this.world.addChild(this.grid, this.rocks, this.pellets.container, this.snakes.container, this.effects.container, this.arena);
+    this.world.addChild(
+      this.grid,
+      this.rocks,
+      this.pellets.container,
+      this.snakes.container,
+      this.effects.container,
+      this.arena,
+    );
     this.app.stage.addChild(this.world);
     this.drawGrid();
   }
@@ -135,11 +146,14 @@ export class Renderer {
 
     // Camera follows the focused head; holds still once dead. The zoom is fixed.
     if (focus?.alive && focusPrev) {
-      this.camera = { x: lerp(focusPrev.head.x, focus.head.x, alpha), y: lerp(focusPrev.head.y, focus.head.y, alpha) };
+      this.camera = {
+        x: lerp(focusPrev.head.x, focus.head.x, alpha),
+        y: lerp(focusPrev.head.y, focus.head.y, alpha),
+      };
     }
     // A whoosh each time the focused snake starts boosting.
     const boosting = !!(focus?.alive && focus.boosting);
-    if (boosting && !this.focusBoosting) sfx('boost');
+    if (boosting && !this.focusBoosting) sfx("boost");
     this.focusBoosting = boosting;
     const { width, height } = this.app.screen;
     // Fit more of the arena on small screens.
@@ -149,7 +163,12 @@ export class Renderer {
     this.world.position.set(width / 2 - this.camera.x * z, height / 2 - this.camera.y * z);
     const hw = width / 2 / z + CULL_MARGIN;
     const hh = height / 2 / z + CULL_MARGIN;
-    const view: Bounds = { x0: this.camera.x - hw, y0: this.camera.y - hh, x1: this.camera.x + hw, y1: this.camera.y + hh };
+    const view: Bounds = {
+      x0: this.camera.x - hw,
+      y0: this.camera.y - hh,
+      x1: this.camera.x + hw,
+      y1: this.camera.y + hh,
+    };
 
     this.drawArena(lerp(prev.arena.radius, cur.arena.radius, alpha), cur);
     this.drawRocks(cur.obstacles);
@@ -159,9 +178,11 @@ export class Renderer {
     pool.begin();
     // Draw the focused snake last so it is always on top.
     for (const s of cur.snakes) {
-      if (s.alive && s.id !== focusId) this.drawSnake(prevById.get(s.id) ?? s, s, alpha, this.paintOf(s.id, focusId), view);
+      if (s.alive && s.id !== focusId)
+        this.drawSnake(prevById.get(s.id) ?? s, s, alpha, this.paintOf(s.id, focusId), view);
     }
-    if (focus?.alive) this.drawSnake(focusPrev ?? focus, focus, alpha, this.paintOf(focus.id, focusId), view);
+    if (focus?.alive)
+      this.drawSnake(focusPrev ?? focus, focus, alpha, this.paintOf(focus.id, focusId), view);
     pool.end();
 
     this.spawnEffects(cur, focusId);
@@ -182,7 +203,9 @@ export class Renderer {
   }
 
   private paintOf(id: number, focusId: number | null): Paint {
-    return this.paints.get(id) ?? { colors: [id === focusId ? COLORS.player : COLORS.bot], band: 1 };
+    return (
+      this.paints.get(id) ?? { colors: [id === focusId ? COLORS.player : COLORS.bot], band: 1 }
+    );
   }
 
   private spawnEffects(cur: RenderWorld, focusId: number | null): void {
@@ -196,7 +219,12 @@ export class Renderer {
         this.effects.death(last.segments, last.radius, last.colors);
         // Someone else dying close enough to be on screen (your own death has its own sound).
         const head = last.segments[0];
-        if (id !== focusId && head && Math.hypot(head.x - this.camera.x, head.y - this.camera.y) < 900) sfx('pop');
+        if (
+          id !== focusId &&
+          head &&
+          Math.hypot(head.x - this.camera.x, head.y - this.camera.y) < 900
+        )
+          sfx("pop");
       }
     }
 
@@ -212,7 +240,7 @@ export class Renderer {
           const reach = s.radius * 3 + 16;
           if ((s.head.x - p.x) ** 2 + (s.head.y - p.y) ** 2 < reach * reach) {
             this.effects.eat(p, s.head, this.paintOf(s.id, focusId).colors[0]!);
-            if (s.id === focusId) sfx('eat');
+            if (s.id === focusId) sfx("eat");
             break;
           }
         }
@@ -226,7 +254,8 @@ export class Renderer {
       const colors = this.paintOf(s.id, focusId).colors;
       this.lastSnakes.set(s.id, { segments: s.segments, radius: s.radius, colors });
       const tail = s.segments[s.segments.length - 1];
-      if (s.boosting && tail && Math.random() < 0.6) this.effects.boostTrail(tail, s.angle, colors[0]!);
+      if (s.boosting && tail && Math.random() < 0.6)
+        this.effects.boostTrail(tail, s.angle, colors[0]!);
     }
   }
 
@@ -256,7 +285,7 @@ export class Renderer {
   }
 
   /** Rocks never move, so the geometry is rebuilt only when the obstacle list changes. */
-  private drawRocks(obstacles: RenderWorld['obstacles']): void {
+  private drawRocks(obstacles: RenderWorld["obstacles"]): void {
     if (obstacles === this.rocksDrawn) return;
     this.rocksDrawn = obstacles;
     const g = this.rocks.clear();
@@ -284,7 +313,13 @@ export class Renderer {
     pool.end();
   }
 
-  private drawSnake(prev: RenderSnake, cur: RenderSnake, alpha: number, paint: Paint, v: Bounds): void {
+  private drawSnake(
+    prev: RenderSnake,
+    cur: RenderSnake,
+    alpha: number,
+    paint: Paint,
+    v: Bounds,
+  ): void {
     const art = paint.skinId === undefined ? undefined : this.art.get(paint.skinId);
     if (art) return this.drawSnakeArt(prev, cur, alpha, paint, art, v);
     const { colors, band } = paint;
@@ -341,7 +376,14 @@ export class Renderer {
    * Draws a snake from its skin art: tail tip, body segments (alternating per band), then
    * the head and eyes on top. Each part faces toward the head, along the body.
    */
-  private drawSnakeArt(prev: RenderSnake, cur: RenderSnake, alpha: number, paint: Paint, art: SkinTextures, v: Bounds): void {
+  private drawSnakeArt(
+    prev: RenderSnake,
+    cur: RenderSnake,
+    alpha: number,
+    paint: Paint,
+    art: SkinTextures,
+    v: Bounds,
+  ): void {
     const { colors, band } = paint;
     const pool = this.snakes;
     const r = lerp(prev.radius, cur.radius, alpha);
@@ -381,7 +423,8 @@ export class Renderer {
       // Face the next segment toward the head.
       const ahead = segs[k - 1]!;
       const rot = Math.atan2(ahead.y - b.y, ahead.x - b.x);
-      const tex = k === n - 1 && n > 2 ? art.tail : bandOf(k) % 2 === 1 ? art.segmentAlt : art.segment;
+      const tex =
+        k === n - 1 && n > 2 ? art.tail : bandOf(k) % 2 === 1 ? art.segmentAlt : art.segment;
       pool.placeSprite(tex, x, y, scale, rot, tintOf(k));
     }
 

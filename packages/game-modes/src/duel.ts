@@ -1,4 +1,4 @@
-import type { GameMode } from './types';
+import type { GameMode } from "./types";
 
 /**
  * 1v1 Duel: a small arena that closes in fast, so fights start early and nobody can
@@ -6,10 +6,10 @@ import type { GameMode } from './types';
  * Public duels between two account holders are ranked (Elo, see @snake/meta).
  */
 export const duel: GameMode = {
-  id: 'duel',
-  room: 'duel',
-  name: '1v1 Duel',
-  description: 'Ranked 1v1 in a small arena that closes fast',
+  id: "duel",
+  room: "duel",
+  name: "1v1 Duel",
+  description: "Ranked 1v1 in a small arena that closes fast",
   maxPlayers: 2,
   maxPrivateSnakes: 2,
   ranked: true,
@@ -22,6 +22,6 @@ export const duel: GameMode = {
       { atSecond: 70, radiusFactor: 0.25 },
       { atSecond: 95, radiusFactor: 0.12 },
     ],
-    headToHead: 'bigger-wins',
+    headToHead: "bigger-wins",
   },
 };

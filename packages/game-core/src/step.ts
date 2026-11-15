@@ -1,9 +1,9 @@
-import type { SimConfig } from './config';
-import { dist2, turnToward } from './math';
-import { bodyLengthForMass, radiusForMass, sampleSegments, trimPath } from './snake';
-import { SpatialHash } from './spatialHash';
-import type { GameEvent, GameState, Input, Snake, SnakeId } from './types';
-import { addPellet, cloneState, fillPellets, random, touchesObstacle } from './world';
+import type { SimConfig } from "./config";
+import { dist2, turnToward } from "./math";
+import { bodyLengthForMass, radiusForMass, sampleSegments, trimPath } from "./snake";
+import { SpatialHash } from "./spatialHash";
+import type { GameEvent, GameState, Input, Snake, SnakeId } from "./types";
+import { addPellet, cloneState, fillPellets, random, touchesObstacle } from "./world";
 
 // Scratch structures reused across steps; they hold no state between calls.
 const segmentHash = new SpatialHash(64);
@@ -11,13 +11,17 @@ const pelletHash = new SpatialHash(64);
 // segmentHash item i -> owner snake index at [2i], segment index at [2i + 1].
 const segOwner: number[] = [];
 
-type Death = Extract<GameEvent, { type: 'death' }>;
+type Death = Extract<GameEvent, { type: "death" }>;
 
 /**
  * Advances the simulation by one fixed step of `cfg.dt`. Pure: returns a new state
  * and leaves `prev` untouched. Snakes without an input keep their last steering.
  */
-export function step(prev: GameState, inputs: ReadonlyMap<SnakeId, Input>, cfg: SimConfig): GameState {
+export function step(
+  prev: GameState,
+  inputs: ReadonlyMap<SnakeId, Input>,
+  cfg: SimConfig,
+): GameState {
   const state = cloneState(prev);
   if (state.finished) return state;
   const dt = cfg.dt;
@@ -80,7 +84,8 @@ function updateArena(state: GameState, cfg: SimConfig, dt: number): void {
   let factor = 1;
   for (const st of cfg.shrinkSchedule) if (elapsed >= st.atSecond) factor = st.radiusFactor;
   a.targetRadius = a.startRadius * factor;
-  if (a.radius > a.targetRadius) a.radius = Math.max(a.targetRadius, a.radius - cfg.shrinkSpeed * dt);
+  if (a.radius > a.targetRadius)
+    a.radius = Math.max(a.targetRadius, a.radius - cfg.shrinkSpeed * dt);
 }
 
 function eatPellets(state: GameState, cfg: SimConfig): void {
@@ -101,7 +106,7 @@ function eatPellets(state: GameState, cfg: SimConfig): void {
       if (dist2(p.x, p.y, s.head.x, s.head.y) > r2) return;
       eaten.add(i);
       s.mass += p.value;
-      state.events.push({ type: 'eat', snakeId: s.id, pelletId: p.id, value: p.value });
+      state.events.push({ type: "eat", snakeId: s.id, pelletId: p.id, value: p.value });
     });
   }
   if (eaten.size > 0) state.pellets = pellets.filter((_, i) => !eaten.has(i));
@@ -110,19 +115,21 @@ function eatPellets(state: GameState, cfg: SimConfig): void {
 function findDeaths(state: GameState, cfg: SimConfig): Map<SnakeId, Death> {
   const deaths = new Map<SnakeId, Death>();
   const snakes = state.snakes;
-  const die = (s: Snake, killerId: SnakeId | null, cause: Death['cause']) => {
-    if (!deaths.has(s.id)) deaths.set(s.id, { type: 'death', snakeId: s.id, killerId, cause });
+  const die = (s: Snake, killerId: SnakeId | null, cause: Death["cause"]) => {
+    if (!deaths.has(s.id)) deaths.set(s.id, { type: "death", snakeId: s.id, killerId, cause });
   };
 
   // Arena: the head leaving the circle kills.
   const { center, radius } = state.arena;
   for (const s of snakes) {
-    if (s.alive && dist2(s.head.x, s.head.y, center.x, center.y) > radius * radius) die(s, null, 'arena');
+    if (s.alive && dist2(s.head.x, s.head.y, center.x, center.y) > radius * radius)
+      die(s, null, "arena");
   }
 
   // Rocks: a head touching one dies. Bodies pass through.
   for (const s of snakes) {
-    if (s.alive && touchesObstacle(state.obstacles, s.head.x, s.head.y, s.radius)) die(s, null, 'rock');
+    if (s.alive && touchesObstacle(state.obstacles, s.head.x, s.head.y, s.radius))
+      die(s, null, "rock");
   }
 
   // Head-to-head.
@@ -134,12 +141,12 @@ function findDeaths(state: GameState, cfg: SimConfig): Map<SnakeId, Death> {
       if (!b.alive) continue;
       const r = a.radius + b.radius;
       if (dist2(a.head.x, a.head.y, b.head.x, b.head.y) > r * r) continue;
-      if (cfg.headToHead === 'bigger-wins' && a.mass !== b.mass) {
-        if (a.mass > b.mass) die(b, a.id, 'head');
-        else die(a, b.id, 'head');
+      if (cfg.headToHead === "bigger-wins" && a.mass !== b.mass) {
+        if (a.mass > b.mass) die(b, a.id, "head");
+        else die(a, b.id, "head");
       } else {
-        die(a, b.id, 'head');
-        die(b, a.id, 'head');
+        die(a, b.id, "head");
+        die(b, a.id, "head");
       }
     }
   }
@@ -164,7 +171,7 @@ function findDeaths(state: GameState, cfg: SimConfig): Map<SnakeId, Death> {
       if (other === s) return;
       const seg = other.segments[segOwner[item * 2 + 1]!]!;
       const r = s.radius + other.radius;
-      if (dist2(s.head.x, s.head.y, seg.x, seg.y) <= r * r) die(s, other.id, 'body');
+      if (dist2(s.head.x, s.head.y, seg.x, seg.y) <= r * r) die(s, other.id, "body");
     });
   }
   return deaths;
@@ -192,5 +199,5 @@ function checkWinner(state: GameState): void {
   if (alive.length > 1) return;
   state.finished = true;
   state.winnerId = alive[0]?.id ?? null;
-  state.events.push({ type: 'win', snakeId: state.winnerId });
+  state.events.push({ type: "win", snakeId: state.winnerId });
 }

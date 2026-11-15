@@ -36,6 +36,7 @@ There is no lint setup yet. pnpm 12 blocks dependency build scripts; `allowBuild
 Packages export TypeScript source directly (`"main": "src/index.ts"`); there is no per-package build step. Vite and tsc consume the source. All packages extend `packages/config/tsconfig.base.json` (strict, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`, so use `import type` for types).
 
 ### packages/game-core: the simulation
+
 Pure TS, zero dependencies, no I/O, no rendering. It will be reused for server authority, client prediction, bots, replays and tests, so it must stay that way.
 
 - `step(prev, inputs, cfg)` in `step.ts` advances one fixed `cfg.dt` (30 Hz). It deep-clones `prev` (`cloneState`) and never mutates it. Order per tick: turn and move each snake (boost burns mass into tail pellets) → shrink arena → eat pellets → find deaths (arena, head-to-head, head-to-body) → drop dead bodies as pellets → respawn pellets → check winner.
@@ -50,6 +51,7 @@ Pure TS, zero dependencies, no I/O, no rendering. It will be reused for server a
 - Collision broad phase uses `SpatialHash`, rebuilt every tick and stored as module-level scratch.
 
 ### packages/design-tokens, assets, ui-kit: the design system
+
 - `Theme` is the token contract; `themeMono` is the Phase 1 black-and-white theme. `applyTheme` writes CSS variables (`color.accent` → `--color-accent`); components reference them with `token('color.accent')`, never raw values. Adding a token means updating both the `Theme` interface and every theme.
 - `packages/assets/assets.manifest.ts` maps typed asset names (`NineSliceName`, `IconName` in `src/types.ts`, mirroring ART_SPEC.md sections 4-5) to files, and snake skin art by skin id (`skins`: an atlas JSON or loose files per `SkinPart`, ART_SPEC.md section 8). It is empty in Phase 1. Every lookup (`getNineSlice`, `getIcon`, `skinFor`, `getSkinArt`) returns `undefined` when art is missing, and callers must fall back.
 - Every ui-kit component resolves its art as: explicit `skin` prop → manifest entries under its prefix (e.g. `button.primary.*`, `panel.inset.*`) → token-based CSS (`resolveSkin` / `nineSliceStyle` in `skin.ts`). `Icon` falls back to a text glyph. So art drops in by editing the manifest only, with no screen code changes.
@@ -57,12 +59,13 @@ Pure TS, zero dependencies, no I/O, no rendering. It will be reused for server a
 - `http://localhost:5173/#ui` is a gallery of every component, with a "Try demo art" toggle that swaps in a generated SVG manifest to check skinning.
 
 ### Networking: protocol, game-server, netcode
+
 The server is authoritative. Hot-path traffic is custom binary over Colyseus `sendBytes`/`onMessageBytes`; Colyseus Schema state is not used. Only the match lifecycle goes as JSON (`'match'` message, `MatchMsg`).
 
 - `packages/protocol` (`messages.ts`): codecs for `Input` and `Ping` (client→server) and `Snapshot`, `Events` and `Pong` (server→client). Positions are i16 at 1/8 unit, angles u16. `ByteReader` honours `byteOffset`, because transports hand over subarrays.
 - Snapshots (every tick, 30 Hz, unreliable in spirit) carry each living snake's head, angle, mass and boost. Bodies are sent only as keyframes: everyone on a client's first snapshot after join, reconnect or match start (`needsFull`), plus one per snake every 30 ticks, staggered by id. A snake missing from a snapshot is dead.
 - Events (reliable) carry pellet adds/removes (diffed from consecutive states in `Match.diff`) and deaths. `reset: true` means "replace all pellets"; it is sent on join and at match start.
-- `apps/game-server`: `Match.ts` is the Colyseus-free core. It owns the `GameState`, a per-player input queue and fixed tick timing against server time (`tickTime`, catch-up capped at 8 steps). It also turns state into protocol messages. Inputs are applied **exactly one per tick, in order** (the last one repeats when the queue is empty; at most 4 queued), and `lastSeq` is the last input *applied*. Prediction depends on this lockstep: applying "the latest input" instead caused a constant one-tick prediction error. `ArenaRoom.ts` runs the lifecycle waiting → countdown → playing → ended (5 s) → waiting. There are two kinds of room, both registered as `'arena'`:
+- `apps/game-server`: `Match.ts` is the Colyseus-free core. It owns the `GameState`, a per-player input queue and fixed tick timing against server time (`tickTime`, catch-up capped at 8 steps). It also turns state into protocol messages. Inputs are applied **exactly one per tick, in order** (the last one repeats when the queue is empty; at most 4 queued), and `lastSeq` is the last input _applied_. Prediction depends on this lockstep: applying "the latest input" instead caused a constant one-tick prediction error. `ArenaRoom.ts` runs the lifecycle waiting → countdown → playing → ended (5 s) → waiting. There are two kinds of room, both registered as `'arena'`:
   - **Public** (`joinOrCreate('arena')`): the first player starts a 10 s lobby countdown (cut to 3 s when the room fills to `ROOM_SIZE` = 20, the free-for-all `maxPlayers`). The match then starts with bots filling the empty slots up to 20 (`names.ts` has the bot names). The room `lock()`s while playing so matchmaking sends newcomers to a fresh room, and unlocks afterwards.
   - **Private** (`create('arena', { private: true })`): `roomId` is a 5-character code (`roomCode()`, no 0/O/1/I/L) and `setPrivate(true)` hides it from matchmaking. Clients join with `joinById(code)`. The first joiner is host (it passes to the next player if they leave). The host sends `'settings'` `{ bots }` and `'start'` (3 s countdown) while waiting; messages from anyone else, or in other phases, are ignored. The room never locks, so late joiners spectate until the next match.
   - Lobby state reaches clients in `MatchMsg.lobby` (`LobbyInfo`, built per recipient). Timings live in the exported `timing` object; they are deliberately not create options, because clients control those. The integration test shortens them.
@@ -74,6 +77,7 @@ The server is authoritative. Hot-path traffic is custom binary over Colyseus `se
 - `AdaptiveDelay` (netcode): the interpolation delay is the 95th percentile of measured snapshot transit (`serverNow - snapshot.serverTime` at arrival) plus one snapshot interval, slewed slowly. Render time is server-time based, so a fixed delay shorter than the one-way latency means constant extrapolation.
 
 ### Accounts and rewards: apps/api, packages/meta, packages/auth
+
 - `packages/meta` is pure shared data and rules: the skin catalog (`SKINS`; a skin is a colour palette until atlases exist), the level curve, `matchReward`, the daily streak rules, the `Profile`/`Grant`/`MatchReport` types and `sanitizeName`. The API, game-server and client all use it, so prices and formulas live in one place.
 - `packages/auth`: HS256 player tokens (`jose`), signed by the API and verified by both the API and the game-server with `AUTH_SECRET`. `INTERNAL_KEY` guards server-to-server calls. Both have dev defaults and throw in production if unset.
 - `apps/api` (Fastify): `buildApp` in `app.ts` holds the routes and `players.ts` the domain logic. The routes:
@@ -86,15 +90,19 @@ The server is authoritative. Hot-path traffic is custom binary over Colyseus `se
 - Game-server join: `onAuth` verifies `options.token` (a bad or missing token means an anonymous player, never a rejection). `onJoin` looks up the account's name and equipped skin. Skins travel in `RosterEntry.skin`; bots get random ones. If the API is down, everyone plays anonymously.
 
 ### Prizes
+
 Per leaderboard: **overall** none; **monthly** (XP, every mode) cash for the top 3 (`MONTHLY_PRIZES` in `@snake/meta` `prizes.ts`: $50/$25/$10, placeholders to tune); **1v1 Duels** game bonuses (`SEASON_REWARD_TIERS`: coins, plus the exclusive `gold` / `diamond` skins for the top two tiers; exclusive skins are never sold, never in `FREE_SKINS`, and bots only wear `PUBLIC_SKINS`).
+
 - The game never moves money. After a month ends, its top three (board position, ties already broken) see `Profile.monthlyPrize` and claim with `POST /me/monthly-prize { details }` (registered accounts only; stored in `monthly_prizes`). The owner pays by hand: `GET /internal/monthly-prizes?month=` (default last month) lists winners with email and payout details, and `POST /internal/monthly-prizes/paid { month, playerId }` marks one paid. Both need `x-internal-key`.
 - `match_results.created_at` is stamped with the API clock (not the DB's), so months, seasons and tests agree.
 - Open design risk: monthly XP can be farmed against bots in public rooms. Consider a minimum number of matches or human opponents before paying real money.
 
 ### Sound
+
 `apps/client/src/sound.ts` synthesizes every effect with WebAudio (no audio files). `sfx('name')` is fire-and-forget and silent when muted, unsupported, or before the first user gesture. `installUiSounds()` (called in `main.tsx`) gives every button, tab, mode card and switch its sound from one document-level click listener, and plays "open" when a `[role="dialog"]` appears, so components need no wiring. Gameplay hooks: `Renderer` (eat, boost, nearby deaths), `Sandbox` and `OnlineGame` (own death, kills, countdown ticks, match start, win, rewards), `account.ts` (claims, purchases). Settings has a Sound switch and volume (localStorage `snake.sound`, `snake.volume`).
 
 ### Game modes, ranked queue and seasons
+
 - `packages/game-modes`: a `GameMode` is data (`room` name, `maxPlayers`, `maxPrivateSnakes`, `ranked`, `sim` overrides for `SimConfig`). A new mode is one file plus a line in `MODES`. Rule hooks (per-tick, win checks) don't exist yet; add them to `GameMode` and game-core's `step` when a mode needs different rules.
 - Each mode has its own Colyseus room name (`'arena'` is free-for-all, `'battleroyale'` is the same field with a shrinking arena, `'duel'`), and `ArenaRoom` derives the mode from `this.roomName`, never from client options. Using one name with `filterBy(['mode'])` let clients that omitted `mode` land in duel rooms.
 - Ranked modes (`mode.ranked`) matchmake public games through `QueueRoom` (`<room>-queue`, e.g. `'duel-queue'`). It pairs by rating every 500 ms (`pairPlayers` in `matchmaking.ts`: closest rating within a window that widens with waiting time, anyone after 30 s), creates the match room with `{ queued: QUEUE_SECRET }` and sends each player a seat reservation (`'matched'`), which the client consumes. Public ranked rooms refuse creation without the secret and are `setPrivate` so `joinOrCreate` can't find them. Private rooms of a ranked mode work normally and are never rated.
@@ -102,6 +110,7 @@ Per leaderboard: **overall** none; **monthly** (XP, every mode) cash for the top
 - Seasons (`@snake/meta` `season.ts`) are UTC calendar months (`YYYY-MM`). Ratings live in `season_ratings`, one row per season and player, created on their first ranked match at a soft reset halfway between last season's rating and 1000. Last season's reward (coins by rating tier) is offered in `Profile.seasonReward` and claimed once with `POST /me/season-reward`. `GET /leaderboard?season=` returns the top 50 plus the viewer's own line. Testing ranked in two tabs needs two accounts: tabs share `snake.token`, and a duel against yourself is never rated.
 
 ### apps/client: Pixi + React shell
+
 - `account.ts` holds the account state (Zustand `useAccount`): it creates a guest on first launch and keeps the token in localStorage (`snake.token`). The game stays playable when the API is unreachable (`status: 'offline'`). `AccountUi.tsx` has the profile modal, the daily reward and the shop modal. `Renderer.setSkins(map)` paints snakes by skin palette.
 - `game/Sandbox.ts` (offline practice) runs a fixed-step accumulator on the Pixi ticker, calling `step()` with player and bot inputs, then `Renderer.render(prev, cur, alpha)` at display rate.
 - `game/OnlineGame.ts` (online): client ticks come from a 30 Hz accumulator against `performance.now()`, woken by a 5 ms `setInterval`, so they never drift. Each tick samples input, sends it and steps the `Predictor`. Rendering runs on the Pixi ticker: everyone else is interpolated at `serverNow - interpDelayMs`, and the own snake comes from the predictor (the same object goes in both render states, so the renderer's lerp is a no-op for it). All traffic goes through the two `NetworkSimulator`s. The Net panel controls them, plus prediction on/off, auto/manual interp delay and correction smoothing, and shows RTT, snapshots/s, kbps, interp delay and prediction error.
@@ -110,6 +119,7 @@ Per leaderboard: **overall** none; **monthly** (XP, every mode) cash for the top
 - React (`App.tsx`, `OnlineApp.tsx`) is the UI layer only. HUD stats go through Zustand stores. Online, the server sends its `SimConfig` in `MatchMsg`. The in-game Net panel (network simulator, prediction, interpolation) shows only in dev builds (`import.meta.env.DEV`).
 
 ## Constraints from PLAN.md
+
 - `game-core`, `netcode` and `protocol` must not depend on the transport (Colyseus is only in `apps/game-server` and `OnlineGame.ts`). If Colyseus fights the custom netcode, PLAN.md allows replacing it with a thin `ws` server.
 - Redis (Upstash) is optional and only rate-limits `POST /auth/guest` (`apps/api/src/redis.ts`); without `KV_REST_API_URL` and `KV_REST_API_TOKEN`, requests are allowed.
 - Planned but not yet created: Redis sessions (leaderboards run on Postgres until they need Redis), real sign-in providers, missions and season pass. WebTransport is out of scope.

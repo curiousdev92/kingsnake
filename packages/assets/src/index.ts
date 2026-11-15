@@ -1,7 +1,14 @@
-import { manifest as shipped } from '../assets.manifest';
-import type { AssetManifest, IconName, ImageSource, NineSlice, NineSliceName, SkinArt } from './types';
+import { manifest as shipped } from "../assets.manifest";
+import type {
+  AssetManifest,
+  IconName,
+  ImageSource,
+  NineSlice,
+  NineSliceName,
+  SkinArt,
+} from "./types";
 
-export * from './types';
+export * from "./types";
 /** The manifest checked into the repo. */
 export { shipped as shippedManifest };
 
@@ -30,7 +37,10 @@ export function getSkinArt(skinId: string): SkinArt | undefined {
  * Collects `<prefix>.<state>` entries into a state -> 9-slice map.
  * Returns undefined when no state has art, so components fall back to tokens.
  */
-export function skinFor<S extends string>(prefix: string, states: readonly S[]): Partial<Record<S, NineSlice>> | undefined {
+export function skinFor<S extends string>(
+  prefix: string,
+  states: readonly S[],
+): Partial<Record<S, NineSlice>> | undefined {
   const out: Partial<Record<S, NineSlice>> = {};
   let found = false;
   for (const s of states) {
@@ -44,8 +54,11 @@ export function skinFor<S extends string>(prefix: string, states: readonly S[]):
 }
 
 /** Picks the best export scale for the display, falling back to the nearest smaller one. */
-export function resolveSrc(src: ImageSource, pixelRatio = globalThis.devicePixelRatio ?? 1): string {
-  if (typeof src === 'string') return src;
+export function resolveSrc(
+  src: ImageSource,
+  pixelRatio = globalThis.devicePixelRatio ?? 1,
+): string {
+  if (typeof src === "string") return src;
   const want = Math.min(3, Math.max(1, Math.ceil(pixelRatio)));
   for (let s = want; s >= 1; s--) {
     const hit = src[s as 1 | 2 | 3];

@@ -15,29 +15,49 @@ export interface NineSlice {
   slice: SliceInsets;
 }
 
-type ButtonKind = 'primary' | 'secondary' | 'danger' | 'icon';
-export type ButtonState = 'normal' | 'pressed' | 'disabled';
-export type PanelKind = 'main' | 'dark' | 'gold';
-export type ChipKind = 'default' | 'gold' | 'gem';
-export type ProgressKind = 'xp' | 'health' | 'timer';
+type ButtonKind = "primary" | "secondary" | "danger" | "icon";
+export type ButtonState = "normal" | "pressed" | "disabled";
+export type PanelKind = "main" | "dark" | "gold";
+export type ChipKind = "default" | "gold" | "gem";
+export type ProgressKind = "xp" | "health" | "timer";
 
 /** Every 9-slice UI element from ART_SPEC.md section 4, as `<element>.<variant>.<state>`. */
 export type NineSliceName =
   | `button.${ButtonKind}.${ButtonState}`
   | `panel.${PanelKind}.normal`
-  | `panel.inset.${'normal' | 'selected'}`
-  | 'modal.frame.normal'
+  | `panel.inset.${"normal" | "selected"}`
+  | "modal.frame.normal"
   | `chip.${ChipKind}.normal`
-  | `progressbar.${'track' | 'fill'}.${ProgressKind}`
-  | `tab.${'normal' | 'selected'}`
-  | 'badge.notification.normal';
+  | `progressbar.${"track" | "fill"}.${ProgressKind}`
+  | `tab.${"normal" | "selected"}`
+  | "badge.notification.normal";
 
 /** Single-image icons from ART_SPEC.md section 5. */
 export type IconName =
-  | 'icon.coin' | 'icon.gem' | 'icon.xp' | 'icon.trophy'
-  | 'icon.play' | 'icon.shop' | 'icon.profile' | 'icon.friends' | 'icon.missions' | 'icon.settings' | 'icon.leaderboard'
-  | 'icon.close' | 'icon.back' | 'icon.copy' | 'icon.share' | 'icon.sound.on' | 'icon.sound.off' | 'icon.vibration'
-  | 'icon.crown' | 'icon.skull' | 'icon.clock' | 'icon.heart' | 'icon.speed' | 'icon.shield';
+  | "icon.coin"
+  | "icon.gem"
+  | "icon.xp"
+  | "icon.trophy"
+  | "icon.play"
+  | "icon.shop"
+  | "icon.profile"
+  | "icon.friends"
+  | "icon.missions"
+  | "icon.settings"
+  | "icon.leaderboard"
+  | "icon.close"
+  | "icon.back"
+  | "icon.copy"
+  | "icon.share"
+  | "icon.sound.on"
+  | "icon.sound.off"
+  | "icon.vibration"
+  | "icon.crown"
+  | "icon.skull"
+  | "icon.clock"
+  | "icon.heart"
+  | "icon.speed"
+  | "icon.shield";
 
 export interface AssetManifest {
   nineSlices: Partial<Record<NineSliceName, NineSlice>>;
@@ -52,7 +72,13 @@ export interface AssetManifest {
  * pixels relative to a 64 px segment, which is drawn as wide as the snake: a 96 px
  * head comes out 1.5 times the body width.
  */
-export type SkinPart = 'head' | 'head.boost' | 'eyes' | 'body.segment' | 'body.segment.alt' | 'tail.tip';
+export type SkinPart =
+  | "head"
+  | "head.boost"
+  | "eyes"
+  | "body.segment"
+  | "body.segment.alt"
+  | "tail.tip";
 
 /** Only `head` and `body.segment` are required; the others fall back to them. */
 export interface SkinArtBase {
@@ -70,7 +96,7 @@ export interface SkinAtlas extends SkinArtBase {
 
 /** A skin as loose image files, one per part (handy while iterating on art). */
 export interface SkinFiles extends SkinArtBase {
-  parts: Partial<Record<SkinPart, ImageSource>> & Record<'head' | 'body.segment', ImageSource>;
+  parts: Partial<Record<SkinPart, ImageSource>> & Record<"head" | "body.segment", ImageSource>;
 }
 
 export type SkinArt = SkinAtlas | SkinFiles;

@@ -1,7 +1,6 @@
 {
   "name": "snake-arena",
   "private": true,
-  "packageManager": "pnpm@12.8.1",
   "scripts": {
     "dev": "turbo run dev --filter=@snake/client --filter=@snake/game-server --filter=@snake/api",
     "build": "turbo run build",
@@ -21,5 +20,6 @@
     "turbo": "^2.5.0",
     "typescript": "^5.8.0",
     "vitest": "^3.2.0"
-  }
+  },
+  "packageManager": "pnpm@12.8.1"
 }

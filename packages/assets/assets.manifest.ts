@@ -1,4 +1,4 @@
-import type { AssetManifest } from './src/types';
+import type { AssetManifest } from "./src/types";
 
 /**
  * The asset manifest: asset name -> file. Phase 1 ships no art, so it is empty and

@@ -1,6 +1,6 @@
-import type { Leaderboard, Profile, ScoreBoard, ScoreBoardKind } from '@snake/meta';
-import { create } from 'zustand';
-import { sfx } from './sound';
+import type { Leaderboard, Profile, ScoreBoard, ScoreBoardKind } from "@snake/meta";
+import { create } from "zustand";
+import { sfx } from "./sound";
 
 /**
  * The player's account: a guest session against the meta API, created on first
@@ -10,16 +10,16 @@ import { sfx } from './sound';
  * or rewards.
  */
 export interface AccountState {
-  status: 'loading' | 'ready' | 'offline';
+  status: "loading" | "ready" | "offline";
   profile: Profile | null;
 }
 
-export const useAccount = create<AccountState>(() => ({ status: 'loading', profile: null }));
+export const useAccount = create<AccountState>(() => ({ status: "loading", profile: null }));
 
 export const API_URL: string = import.meta.env.VITE_API_URL ?? `http://${location.hostname}:3000`;
 
-const TOKEN_KEY = 'snake.token';
-const NAME_KEY = 'snake.name';
+const TOKEN_KEY = "snake.token";
+const NAME_KEY = "snake.name";
 
 // Storage can be unavailable (private mode, blocked site data): every access is guarded.
 function storageGet(key: string): string | null {
@@ -43,7 +43,7 @@ export function sessionToken(): string | null {
 }
 
 /** Name typed before an account existed (or while offline). */
-export const savedName = () => storageGet(NAME_KEY) ?? '';
+export const savedName = () => storageGet(NAME_KEY) ?? "";
 export const saveName = (name: string) => storageSet(NAME_KEY, name);
 
 export class ApiFailure extends Error {
@@ -61,25 +61,26 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   const res = await fetch(`${API_URL}${path}`, {
     method,
     headers: {
-      ...(body !== undefined && { 'content-type': 'application/json' }),
+      ...(body !== undefined && { "content-type": "application/json" }),
       ...(token && { authorization: `Bearer ${token}` }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(5000),
   });
   const json = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
-  if (!res.ok) throw new ApiFailure(res.status, json.error ?? 'error', json.message ?? `HTTP ${res.status}`);
+  if (!res.ok)
+    throw new ApiFailure(res.status, json.error ?? "error", json.message ?? `HTTP ${res.status}`);
   return json as T;
 }
 
-const setProfile = (profile: Profile) => useAccount.setState({ status: 'ready', profile });
+const setProfile = (profile: Profile) => useAccount.setState({ status: "ready", profile });
 
 /** Signs in with the stored token, or creates a guest account. Never throws. */
 export async function initAccount(): Promise<void> {
   try {
     if (sessionToken()) {
       try {
-        setProfile(await call<Profile>('GET', '/me'));
+        setProfile(await call<Profile>("GET", "/me"));
         return;
       } catch (e) {
         // Token rejected or account gone: start a fresh guest. Anything else is "offline".
@@ -87,17 +88,21 @@ export async function initAccount(): Promise<void> {
         storageSet(TOKEN_KEY, null);
       }
     }
-    const { token, profile } = await call<{ token: string; profile: Profile }>('POST', '/auth/guest', { name: savedName() });
+    const { token, profile } = await call<{ token: string; profile: Profile }>(
+      "POST",
+      "/auth/guest",
+      { name: savedName() },
+    );
     storageSet(TOKEN_KEY, token);
     setProfile(profile);
   } catch {
-    useAccount.setState({ status: 'offline', profile: null });
+    useAccount.setState({ status: "offline", profile: null });
   }
 }
 
 export async function refreshProfile(): Promise<void> {
   try {
-    setProfile(await call<Profile>('GET', '/me'));
+    setProfile(await call<Profile>("GET", "/me"));
   } catch {
     // keep what we have
   }
@@ -113,66 +118,71 @@ function startSession({ token, profile }: Session): void {
 
 /** Adds email and password to the current guest, so its progress is kept and can be logged into anywhere. */
 export async function register(email: string, password: string): Promise<void> {
-  startSession(await call<Session>('POST', '/auth/register', { email, password, name: savedName() }));
+  startSession(
+    await call<Session>("POST", "/auth/register", { email, password, name: savedName() }),
+  );
 }
 
 /** Switches to an existing account. The current guest's progress stays with that guest. */
 export async function login(email: string, password: string): Promise<void> {
-  startSession(await call<Session>('POST', '/auth/login', { email, password }));
+  startSession(await call<Session>("POST", "/auth/login", { email, password }));
 }
 
 /** Forgets the session and continues as a fresh guest. */
 export async function signOut(): Promise<void> {
   storageSet(TOKEN_KEY, null);
-  saveName('');
-  useAccount.setState({ status: 'loading', profile: null });
+  saveName("");
+  useAccount.setState({ status: "loading", profile: null });
   await initAccount();
 }
 
 export async function setAvatar(avatar: string): Promise<void> {
-  setProfile(await call<Profile>('PATCH', '/me', { avatar }));
+  setProfile(await call<Profile>("PATCH", "/me", { avatar }));
 }
 
 export async function rename(name: string): Promise<void> {
-  setProfile(await call<Profile>('PATCH', '/me', { name }));
+  setProfile(await call<Profile>("PATCH", "/me", { name }));
 }
 
 export async function claimDaily(): Promise<number> {
-  const res = await call<{ coins: number; profile: Profile }>('POST', '/me/daily');
+  const res = await call<{ coins: number; profile: Profile }>("POST", "/me/daily");
   setProfile(res.profile);
-  sfx('coin');
+  sfx("coin");
   return res.coins;
 }
 
 export async function claimSeasonReward(): Promise<number> {
-  const res = await call<{ coins: number; profile: Profile }>('POST', '/me/season-reward');
+  const res = await call<{ coins: number; profile: Profile }>("POST", "/me/season-reward");
   setProfile(res.profile);
-  sfx('reward');
+  sfx("reward");
   return res.coins;
 }
 
 /** Cash prize winners leave payout details; the owner pays by hand. Needs a registered account. */
 export async function claimMonthlyPrize(details: string): Promise<void> {
-  setProfile(await call<Profile>('POST', '/me/monthly-prize', { details }));
-  sfx('reward');
+  setProfile(await call<Profile>("POST", "/me/monthly-prize", { details }));
+  sfx("reward");
 }
 
 /** A season's leaderboard (default: the current one); includes your own line when signed in. */
 export function fetchLeaderboard(seasonId?: string): Promise<Leaderboard> {
-  return call<Leaderboard>('GET', seasonId ? `/leaderboard?season=${encodeURIComponent(seasonId)}` : '/leaderboard');
+  return call<Leaderboard>(
+    "GET",
+    seasonId ? `/leaderboard?season=${encodeURIComponent(seasonId)}` : "/leaderboard",
+  );
 }
 
 /** The all-time or current-month XP board (every mode); includes your own line when signed in. */
 export function fetchScoreBoard(kind: ScoreBoardKind): Promise<ScoreBoard> {
-  return call<ScoreBoard>('GET', `/leaderboard/${kind}`);
+  return call<ScoreBoard>("GET", `/leaderboard/${kind}`);
 }
 
 export async function buySkin(itemId: string): Promise<void> {
-  setProfile(await call<Profile>('POST', '/shop/buy', { itemId }));
-  sfx('purchase');
+  setProfile(await call<Profile>("POST", "/shop/buy", { itemId }));
+  sfx("purchase");
 }
 
 export async function equipSkin(itemId: string): Promise<void> {
-  setProfile(await call<Profile>('POST', '/me/equip', { itemId }));
-  sfx('equip');
+  setProfile(await call<Profile>("POST", "/me/equip", { itemId }));
+  sfx("equip");
 }

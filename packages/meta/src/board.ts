@@ -1,4 +1,4 @@
-import type { Season } from './season';
+import type { Season } from "./season";
 
 /**
  * Score boards rank players by the XP their matches earned, across every mode
@@ -6,7 +6,7 @@ import type { Season } from './season';
  * board adds up all time; the "monthly" board adds up one UTC calendar month.
  * Ranked duel ratings have their own board (see season.ts).
  */
-export type ScoreBoardKind = 'overall' | 'monthly';
+export type ScoreBoardKind = "overall" | "monthly";
 
 /** One line of a score board (`GET /leaderboard/overall` and `/leaderboard/monthly`). */
 export interface ScoreEntry {

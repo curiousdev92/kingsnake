@@ -1,11 +1,17 @@
-import type { MonthlyPrize } from './prizes';
-import type { SeasonStanding } from './season';
+import type { MonthlyPrize } from "./prizes";
+import type { SeasonStanding } from "./season";
 
 export const MAX_NAME_LENGTH = 16;
 
 /** Letters, digits, space and `_.-`, trimmed to 16 characters. Empty when nothing usable is left. */
 export function sanitizeName(name: unknown): string {
-  return typeof name === 'string' ? name.replace(/[^\p{L}\p{N} _.-]/gu, '').trim().slice(0, MAX_NAME_LENGTH).trim() : '';
+  return typeof name === "string"
+    ? name
+        .replace(/[^\p{L}\p{N} _.-]/gu, "")
+        .trim()
+        .slice(0, MAX_NAME_LENGTH)
+        .trim()
+    : "";
 }
 
 /** A player's profile as the API returns it. */

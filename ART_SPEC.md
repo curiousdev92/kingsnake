@@ -30,19 +30,19 @@ States where relevant: `normal`, `pressed`, `disabled`. Optional: `hover` (web o
 
 Each is delivered as one image plus the slice insets (left, top, right, bottom) in 1x pixels, written in a sidecar `*.slice.json`, for example `{ "left": 24, "top": 24, "right": 24, "bottom": 32 }`. Corners and edges must survive stretching: no gradients that depend on exact size, and no details inside the stretchable center.
 
-| Asset | Variants | States | Min size at 1x |
-|---|---|---|---|
-| `button.primary` | default | normal, pressed, disabled | 96x56 |
-| `button.secondary` | default | normal, pressed, disabled | 96x56 |
-| `button.danger` | default | normal, pressed, disabled | 96x56 |
-| `button.icon` (square) | default | normal, pressed, disabled | 56x56 |
-| `panel.main` | default, dark, gold | normal | 96x96 |
-| `panel.inset` (list rows, slots) | default | normal, selected | 64x48 |
-| `modal.frame` | default | normal | 128x128 |
-| `chip` (labels, currency pills) | default, gold, gem | normal | 64x32 |
-| `progressbar.track` / `progressbar.fill` | xp, health, timer | normal | 48x20 |
-| `tab` | default | normal, selected | 80x44 |
-| `badge.notification` | default | normal | 24x24 |
+| Asset                                    | Variants            | States                    | Min size at 1x |
+| ---------------------------------------- | ------------------- | ------------------------- | -------------- |
+| `button.primary`                         | default             | normal, pressed, disabled | 96x56          |
+| `button.secondary`                       | default             | normal, pressed, disabled | 96x56          |
+| `button.danger`                          | default             | normal, pressed, disabled | 96x56          |
+| `button.icon` (square)                   | default             | normal, pressed, disabled | 56x56          |
+| `panel.main`                             | default, dark, gold | normal                    | 96x96          |
+| `panel.inset` (list rows, slots)         | default             | normal, selected          | 64x48          |
+| `modal.frame`                            | default             | normal                    | 128x128        |
+| `chip` (labels, currency pills)          | default, gold, gem  | normal                    | 64x32          |
+| `progressbar.track` / `progressbar.fill` | xp, health, timer   | normal                    | 48x20          |
+| `tab`                                    | default             | normal, selected          | 80x44          |
+| `badge.notification`                     | default             | normal                    | 24x24          |
 
 ## 5. Icons (single images, not sliced)
 
@@ -72,6 +72,7 @@ Size at 1x: 64x64 for large, 32x32 for small. Provide a clean silhouette so they
 Delivered as sprite sheets (PNG + JSON, exported from a packer such as free-tex-packer). Max atlas size 2048x2048.
 
 **Snake skins**: snakes move in free directions and bend smoothly, so a skin is not made of grid cells. Each skin is its own atlas named `skin.<id>`:
+
 - `head`: one sprite facing right (the engine rotates it), 96x96 at 1x, plus `head.dead` and `head.boost`
 - `eyes`: optional separate layer so eyes can look toward the steering direction
 - `body.segment`: a round segment, 64x64, designed to overlap its neighbors by about 50% with no visible seams
@@ -82,6 +83,7 @@ Delivered as sprite sheets (PNG + JSON, exported from a packer such as free-tex-
 - The body gets thicker as the snake grows, so all parts must scale cleanly (no 1px details)
 
 **Pickups and arena:**
+
 - `pellet.<color>`: small glowing pellets, 32x32, in 6-8 colors; `pellet.big` (dropped by dead snakes), 64x64, with an optional 4-frame glow pulse
 - `arena.bg`: seamless 512x512 background tile, repeated and slightly parallaxed across the map
 - `arena.border`: the circular boundary ring (seamless along its length)
@@ -89,6 +91,7 @@ Delivered as sprite sheets (PNG + JSON, exported from a packer such as free-tex-
 - Optional later: `powerup.speed`, `powerup.shield`, `powerup.magnet` (64x64)
 
 **Effects (frame sequences):**
+
 - `fx.death.burst` (8-12 frames), `fx.eat.pop` (6 frames), `fx.spawn.ring` (8 frames), `fx.boost.trail` (particle sprites emitted while boosting), `fx.trail.<id>` (cosmetic trail particles)
 
 ## 9. Backgrounds and logo

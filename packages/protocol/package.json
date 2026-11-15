@@ -9,12 +9,12 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json"
   },
+  "dependencies": {
+    "@snake/game-core": "workspace:*"
+  },
   "devDependencies": {
     "@snake/config": "workspace:*",
     "typescript": "^5.8.0",
     "vitest": "^3.2.0"
-  },
-  "dependencies": {
-    "@snake/game-core": "workspace:*"
   }
 }

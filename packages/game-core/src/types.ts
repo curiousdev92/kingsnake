@@ -1,4 +1,4 @@
-import type { Vec2 } from './math';
+import type { Vec2 } from "./math";
 
 export type SnakeId = number;
 
@@ -49,9 +49,14 @@ export interface Input {
 }
 
 export type GameEvent =
-  | { type: 'eat'; snakeId: SnakeId; pelletId: number; value: number }
-  | { type: 'death'; snakeId: SnakeId; killerId: SnakeId | null; cause: 'body' | 'head' | 'arena' | 'rock' }
-  | { type: 'win'; snakeId: SnakeId | null };
+  | { type: "eat"; snakeId: SnakeId; pelletId: number; value: number }
+  | {
+      type: "death";
+      snakeId: SnakeId;
+      killerId: SnakeId | null;
+      cause: "body" | "head" | "arena" | "rock";
+    }
+  | { type: "win"; snakeId: SnakeId | null };
 
 export interface GameState {
   tick: number;

@@ -1,6 +1,6 @@
-import type { Vec2 } from '@snake/game-core';
-import type { Texture } from 'pixi.js';
-import { SpritePool } from './SpritePool';
+import type { Vec2 } from "@snake/game-core";
+import type { Texture } from "pixi.js";
+import { SpritePool } from "./SpritePool";
 
 interface Particle {
   x: number;
@@ -39,7 +39,17 @@ export class Effects {
     for (let i = 0; i < 4; i++) {
       const a = Math.random() * Math.PI * 2;
       const sp = 40 + Math.random() * 60;
-      this.add({ x: at.x, y: at.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.3, max: 0.3, size: 2.5, color, target: head });
+      this.add({
+        x: at.x,
+        y: at.y,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp,
+        life: 0.3,
+        max: 0.3,
+        size: 2.5,
+        color,
+        target: head,
+      });
     }
   }
 
@@ -53,14 +63,32 @@ export class Effects {
         const a = Math.random() * Math.PI * 2;
         const sp = 30 + Math.random() * 120;
         const life = 0.5 + Math.random() * 0.5;
-        this.add({ x: p.x, y: p.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life, max: life, size: radius * (0.3 + Math.random() * 0.4), color });
+        this.add({
+          x: p.x,
+          y: p.y,
+          vx: Math.cos(a) * sp,
+          vy: Math.sin(a) * sp,
+          life,
+          max: life,
+          size: radius * (0.3 + Math.random() * 0.4),
+          color,
+        });
       }
     }
     const head = segments[0];
     if (!head) return;
     for (let i = 0; i < 24; i++) {
       const a = (i / 24) * Math.PI * 2;
-      this.add({ x: head.x, y: head.y, vx: Math.cos(a) * 260, vy: Math.sin(a) * 260, life: 0.4, max: 0.4, size: 3, color: 0xffffff });
+      this.add({
+        x: head.x,
+        y: head.y,
+        vx: Math.cos(a) * 260,
+        vy: Math.sin(a) * 260,
+        life: 0.4,
+        max: 0.4,
+        size: 3,
+        color: 0xffffff,
+      });
     }
   }
 
@@ -68,7 +96,16 @@ export class Effects {
   boostTrail(tail: Vec2, angle: number, color: number): void {
     const a = angle + Math.PI + (Math.random() - 0.5) * 1.2;
     const sp = 20 + Math.random() * 40;
-    this.add({ x: tail.x, y: tail.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.4, max: 0.4, size: 2 + Math.random() * 2, color });
+    this.add({
+      x: tail.x,
+      y: tail.y,
+      vx: Math.cos(a) * sp,
+      vy: Math.sin(a) * sp,
+      life: 0.4,
+      max: 0.4,
+      size: 2 + Math.random() * 2,
+      color,
+    });
   }
 
   update(dt: number): void {

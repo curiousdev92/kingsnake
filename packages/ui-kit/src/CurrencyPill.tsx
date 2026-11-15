@@ -1,8 +1,8 @@
-import { Chip } from './Chip';
-import { Icon } from './Icon';
-import { useCountUp } from './motion';
+import { Chip } from "./Chip";
+import { Icon } from "./Icon";
+import { useCountUp } from "./motion";
 
-export type Currency = 'coin' | 'gem' | 'xp';
+export type Currency = "coin" | "gem" | "xp";
 
 export interface CurrencyPillProps {
   currency: Currency;
@@ -11,15 +11,17 @@ export interface CurrencyPillProps {
   animate?: boolean;
 }
 
-const CHIP = { coin: 'gold', gem: 'gem', xp: 'default' } as const;
-const LABEL = { coin: 'Coins', gem: 'Gems', xp: 'XP' } as const;
+const CHIP = { coin: "gold", gem: "gem", xp: "default" } as const;
+const LABEL = { coin: "Coins", gem: "Gems", xp: "XP" } as const;
 
 export function CurrencyPill({ currency, amount, animate = true }: CurrencyPillProps) {
   const shown = useCountUp(amount, animate);
   return (
     <Chip variant={CHIP[currency]} aria-label={`${amount.toLocaleString()} ${LABEL[currency]}`}>
       <Icon name={`icon.${currency}`} size={16} />
-      <span style={{ fontVariantNumeric: 'tabular-nums' }}>{Math.round(shown).toLocaleString()}</span>
+      <span style={{ fontVariantNumeric: "tabular-nums" }}>
+        {Math.round(shown).toLocaleString()}
+      </span>
     </Chip>
   );
 }

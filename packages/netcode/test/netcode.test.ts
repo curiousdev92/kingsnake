@@ -1,9 +1,9 @@
-import { createGame, makeConfig, step } from '@snake/game-core';
-import { describe, expect, it } from 'vitest';
-import { ClockSync, NetworkSimulator, RemoteWorld, SnapshotBuffer } from '../src';
+import { createGame, makeConfig, step } from "@snake/game-core";
+import { describe, expect, it } from "vitest";
+import { ClockSync, NetworkSimulator, RemoteWorld, SnapshotBuffer } from "../src";
 
-describe('ClockSync', () => {
-  it('uses the lowest-RTT sample', () => {
+describe("ClockSync", () => {
+  it("uses the lowest-RTT sample", () => {
     const c = new ClockSync();
     // True offset is +1000. A slow sample with asymmetric delay would mislead.
     c.addSample(0, 1000 + 200, 210); // rtt 210, request leg took 200ms
@@ -13,34 +13,34 @@ describe('ClockSync', () => {
   });
 });
 
-describe('SnapshotBuffer', () => {
+describe("SnapshotBuffer", () => {
   const buf = () => {
     const b = new SnapshotBuffer<{ serverTime: number }>(50);
     for (const t of [0, 100, 200]) b.push({ serverTime: t });
     return b;
   };
 
-  it('interpolates between the surrounding pair', () => {
+  it("interpolates between the surrounding pair", () => {
     const s = buf().sample(150)!;
     expect(s.a.serverTime).toBe(100);
     expect(s.b.serverTime).toBe(200);
     expect(s.t).toBeCloseTo(0.5);
   });
 
-  it('extrapolates a limited amount past the newest snapshot', () => {
+  it("extrapolates a limited amount past the newest snapshot", () => {
     const s = buf().sample(400)!;
     expect(s.extrapolating).toBe(true);
     expect(s.t).toBeCloseTo(1.5); // capped at 50ms over a 100ms span
   });
 
-  it('drops out-of-order snapshots', () => {
+  it("drops out-of-order snapshots", () => {
     const b = buf();
     expect(b.push({ serverTime: 150 })).toBe(false);
     expect(b.latest?.serverTime).toBe(200);
   });
 });
 
-describe('NetworkSimulator', () => {
+describe("NetworkSimulator", () => {
   function harness(random: () => number) {
     let now = 0;
     const queue: { at: number; fn: () => void }[] = [];
@@ -55,14 +55,14 @@ describe('NetworkSimulator', () => {
     return { sim, queue, flush, setNow: (t: number) => (now = t) };
   }
 
-  it('drops unreliable messages by the loss rate but never reliable ones', () => {
+  it("drops unreliable messages by the loss rate but never reliable ones", () => {
     const { sim, queue } = harness(() => 0.1);
     sim.deliver(() => {}, false);
     sim.deliver(() => {}, true);
     expect(queue.length).toBe(1);
   });
 
-  it('keeps reliable messages in order despite jitter', () => {
+  it("keeps reliable messages in order despite jitter", () => {
     const rolls = [0.99, 0.0]; // first message gets max jitter, second none
     const { sim, flush, setNow } = harness(() => rolls.shift() ?? 0);
     const got: number[] = [];
@@ -74,10 +74,10 @@ describe('NetworkSimulator', () => {
   });
 });
 
-describe('RemoteWorld', () => {
-  it('rebuilds bodies from head positions to match the server', () => {
+describe("RemoteWorld", () => {
+  it("rebuilds bodies from head positions to match the server", () => {
     const cfg = makeConfig({ pelletDensity: 0, shrinkSchedule: [], obstacleDensity: 0 });
-    let state = createGame([{ name: 'a' }], cfg);
+    let state = createGame([{ name: "a" }], cfg);
     const world = new RemoteWorld(cfg);
     const snap = (body: boolean) => ({
       tick: state.tick,
@@ -85,7 +85,15 @@ describe('RemoteWorld', () => {
       lastSeq: 0,
       arenaRadius: state.arena.radius,
       arenaTargetRadius: state.arena.targetRadius,
-      snakes: state.snakes.map((s) => ({ id: s.id, x: s.head.x, y: s.head.y, angle: s.angle, mass: s.mass, boosting: false, body: body ? s.segments : null })),
+      snakes: state.snakes.map((s) => ({
+        id: s.id,
+        x: s.head.x,
+        y: s.head.y,
+        angle: s.angle,
+        mass: s.mass,
+        boosting: false,
+        body: body ? s.segments : null,
+      })),
     });
     world.applySnapshot(snap(true));
     const turn = new Map([[1, { targetAngle: 1.2, boost: false }]]);
@@ -102,14 +110,28 @@ describe('RemoteWorld', () => {
     }
   });
 
-  it('applies pellet events only when render time reaches them', () => {
+  it("applies pellet events only when render time reaches them", () => {
     const world = new RemoteWorld(makeConfig());
-    world.queueEvents({ tick: 1, serverTime: 100, reset: true, added: [{ id: 1, x: 0, y: 0, value: 1 }], removed: [], deaths: [] });
-    world.queueEvents({ tick: 2, serverTime: 200, reset: false, added: [], removed: [1], deaths: [{ snakeId: 3, killerId: null, cause: 'arena' }] });
+    world.queueEvents({
+      tick: 1,
+      serverTime: 100,
+      reset: true,
+      added: [{ id: 1, x: 0, y: 0, value: 1 }],
+      removed: [],
+      deaths: [],
+    });
+    world.queueEvents({
+      tick: 2,
+      serverTime: 200,
+      reset: false,
+      added: [],
+      removed: [1],
+      deaths: [{ snakeId: 3, killerId: null, cause: "arena" }],
+    });
     world.applyEventsUntil(150);
     expect(world.pelletCount).toBe(1);
     const deaths = world.applyEventsUntil(250);
     expect(world.pelletCount).toBe(0);
-    expect(deaths).toEqual([{ snakeId: 3, killerId: null, cause: 'arena' }]);
+    expect(deaths).toEqual([{ snakeId: 3, killerId: null, cause: "arena" }]);
   });
 });

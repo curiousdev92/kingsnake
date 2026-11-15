@@ -1,6 +1,6 @@
-import type { SimConfig } from './config';
-import type { Vec2 } from './math';
-import type { Snake, SnakeId } from './types';
+import type { SimConfig } from "./config";
+import type { Vec2 } from "./math";
+import type { Snake, SnakeId } from "./types";
 
 export function radiusForMass(mass: number, cfg: SimConfig): number {
   return cfg.baseRadius + Math.sqrt(Math.max(0, mass)) * cfg.radiusPerSqrtMass;

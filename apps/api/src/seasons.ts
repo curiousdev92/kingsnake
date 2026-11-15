@@ -6,9 +6,9 @@ import {
   type Season,
   type SeasonReward,
   type SeasonStanding,
-} from '@snake/meta';
-import type { Db } from './db';
-import { ApiError } from './errors';
+} from "@snake/meta";
+import type { Db } from "./db";
+import { ApiError } from "./errors";
 
 interface SeasonRow {
   rating: number;
@@ -18,9 +18,14 @@ interface SeasonRow {
   reward_claimed: boolean;
 }
 
-async function seasonRow(db: Db, season: Season, playerId: string, lock = false): Promise<SeasonRow | null> {
+async function seasonRow(
+  db: Db,
+  season: Season,
+  playerId: string,
+  lock = false,
+): Promise<SeasonRow | null> {
   const rows = await db.query<SeasonRow>(
-    `SELECT rating, wins, losses, draws, reward_claimed FROM season_ratings WHERE season_id = $1 AND player_id = $2${lock ? ' FOR UPDATE' : ''}`,
+    `SELECT rating, wins, losses, draws, reward_claimed FROM season_ratings WHERE season_id = $1 AND player_id = $2${lock ? " FOR UPDATE" : ""}`,
     [season.id, playerId],
   );
   return rows[0] ?? null;
@@ -38,14 +43,32 @@ export async function seasonRating(db: Db, season: Season, playerId: string): Pr
 
 /** 1-based leaderboard position; ties share a rank. */
 async function rankOf(db: Db, season: Season, rating: number): Promise<number> {
-  const [row] = await db.query<{ above: number }>('SELECT count(*)::int AS above FROM season_ratings WHERE season_id = $1 AND rating > $2', [season.id, rating]);
+  const [row] = await db.query<{ above: number }>(
+    "SELECT count(*)::int AS above FROM season_ratings WHERE season_id = $1 AND rating > $2",
+    [season.id, rating],
+  );
   return row!.above + 1;
 }
 
 export async function standing(db: Db, season: Season, playerId: string): Promise<SeasonStanding> {
   const row = await seasonRow(db, season, playerId);
-  if (!row) return { season, rating: await startRating(db, season, playerId), wins: 0, losses: 0, draws: 0, rank: null };
-  return { season, rating: row.rating, wins: row.wins, losses: row.losses, draws: row.draws, rank: await rankOf(db, season, row.rating) };
+  if (!row)
+    return {
+      season,
+      rating: await startRating(db, season, playerId),
+      wins: 0,
+      losses: 0,
+      draws: 0,
+      rank: null,
+    };
+  return {
+    season,
+    rating: row.rating,
+    wins: row.wins,
+    losses: row.losses,
+    draws: row.draws,
+    rank: await rankOf(db, season, row.rating),
+  };
 }
 
 /**
@@ -54,12 +77,21 @@ export async function standing(db: Db, season: Season, playerId: string): Promis
  */
 export async function lockSeasonRating(tx: Db, season: Season, playerId: string): Promise<number> {
   const start = await startRating(tx, season, playerId);
-  await tx.query('INSERT INTO season_ratings (season_id, player_id, rating) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [season.id, playerId, start]);
+  await tx.query(
+    "INSERT INTO season_ratings (season_id, player_id, rating) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+    [season.id, playerId, start],
+  );
   return (await seasonRow(tx, season, playerId, true))!.rating;
 }
 
 /** Records one ranked result; the row must be locked with lockSeasonRating. */
-export async function recordSeasonResult(tx: Db, season: Season, playerId: string, rating: number, score: number): Promise<void> {
+export async function recordSeasonResult(
+  tx: Db,
+  season: Season,
+  playerId: string,
+  rating: number,
+  score: number,
+): Promise<void> {
   await tx.query(
     `UPDATE season_ratings SET rating = $3, wins = wins + $4, losses = losses + $5, draws = draws + $6, updated_at = now()
      WHERE season_id = $1 AND player_id = $2`,
@@ -68,13 +100,24 @@ export async function recordSeasonResult(tx: Db, season: Season, playerId: strin
 }
 
 /** Last season's reward, if they played it and haven't claimed it. */
-export async function pendingSeasonReward(db: Db, current: Season, playerId: string): Promise<SeasonReward | null> {
+export async function pendingSeasonReward(
+  db: Db,
+  current: Season,
+  playerId: string,
+): Promise<SeasonReward | null> {
   const last = previousSeason(current);
   const row = await seasonRow(db, last, playerId);
   if (!row || row.reward_claimed) return null;
   const tier = seasonTier(row.rating);
   return {
-    standing: { season: last, rating: row.rating, wins: row.wins, losses: row.losses, draws: row.draws, rank: await rankOf(db, last, row.rating) },
+    standing: {
+      season: last,
+      rating: row.rating,
+      wins: row.wins,
+      losses: row.losses,
+      draws: row.draws,
+      rank: await rankOf(db, last, row.rating),
+    },
     tier: tier.name,
     coins: tier.coins,
     skin: tier.skin ?? null,
@@ -82,15 +125,27 @@ export async function pendingSeasonReward(db: Db, current: Season, playerId: str
 }
 
 /** Pays last season's reward once. */
-export async function claimSeasonReward(db: Db, current: Season, playerId: string): Promise<number> {
+export async function claimSeasonReward(
+  db: Db,
+  current: Season,
+  playerId: string,
+): Promise<number> {
   return db.transaction(async (tx) => {
     const last = previousSeason(current);
     const row = await seasonRow(tx, last, playerId, true);
-    if (!row || row.reward_claimed) throw new ApiError(409, 'nothing_to_claim', 'No season reward to claim');
+    if (!row || row.reward_claimed)
+      throw new ApiError(409, "nothing_to_claim", "No season reward to claim");
     const { coins, skin } = seasonTier(row.rating);
-    await tx.query('UPDATE season_ratings SET reward_claimed = true WHERE season_id = $1 AND player_id = $2', [last.id, playerId]);
-    await tx.query('UPDATE players SET coins = coins + $2 WHERE id = $1', [playerId, coins]);
-    if (skin) await tx.query('INSERT INTO owned_items (player_id, item_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [playerId, skin]);
+    await tx.query(
+      "UPDATE season_ratings SET reward_claimed = true WHERE season_id = $1 AND player_id = $2",
+      [last.id, playerId],
+    );
+    await tx.query("UPDATE players SET coins = coins + $2 WHERE id = $1", [playerId, coins]);
+    if (skin)
+      await tx.query(
+        "INSERT INTO owned_items (player_id, item_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        [playerId, skin],
+      );
     return coins;
   });
 }
@@ -101,16 +156,27 @@ const leaderboardSelect = `
   FROM season_ratings s JOIN players p ON p.id = s.player_id
   WHERE s.season_id = $1`;
 
-type BoardRow = Omit<LeaderboardEntry, 'you'> & { id: string };
+type BoardRow = Omit<LeaderboardEntry, "you"> & { id: string };
 
 /** Top `limit` of a season (ties broken by who got there first), plus the viewer's own line if they are below it. */
-export async function leaderboard(db: Db, season: Season, viewerId: string | null, limit = 50): Promise<{ top: LeaderboardEntry[]; you: LeaderboardEntry | null }> {
-  const rows = await db.query<BoardRow>(`${leaderboardSelect} ORDER BY s.rating DESC, s.updated_at ASC LIMIT $2`, [season.id, limit]);
+export async function leaderboard(
+  db: Db,
+  season: Season,
+  viewerId: string | null,
+  limit = 50,
+): Promise<{ top: LeaderboardEntry[]; you: LeaderboardEntry | null }> {
+  const rows = await db.query<BoardRow>(
+    `${leaderboardSelect} ORDER BY s.rating DESC, s.updated_at ASC LIMIT $2`,
+    [season.id, limit],
+  );
   const entry = ({ id, ...r }: BoardRow): LeaderboardEntry => ({ ...r, you: id === viewerId });
   const top = rows.map(entry);
   let you = top.find((e) => e.you) ?? null;
   if (!you && viewerId) {
-    const [mine] = await db.query<BoardRow>(`${leaderboardSelect} AND s.player_id = $2`, [season.id, viewerId]);
+    const [mine] = await db.query<BoardRow>(`${leaderboardSelect} AND s.player_id = $2`, [
+      season.id,
+      viewerId,
+    ]);
     you = mine ? entry(mine) : null;
   }
   return { top, you };

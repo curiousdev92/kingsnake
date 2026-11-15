@@ -6,18 +6,18 @@ import {
   type GameState,
   type Input,
   type SimConfig,
-} from '@snake/game-core';
-import { DEFAULT_SKIN, PUBLIC_SKINS } from '@snake/meta';
-import { useAccount } from '../account';
-import { haptic } from '../haptics';
-import { sfx } from '../sound';
-import { PlayerInput } from './PlayerInput';
-import { Renderer } from './Renderer';
+} from "@snake/game-core";
+import { DEFAULT_SKIN, PUBLIC_SKINS } from "@snake/meta";
+import { useAccount } from "../account";
+import { haptic } from "../haptics";
+import { sfx } from "../sound";
+import { PlayerInput } from "./PlayerInput";
+import { Renderer } from "./Renderer";
 
 export const PLAYER_ID = 1;
 const MAX_STEPS_PER_FRAME = 5;
 
-export type SandboxStatus = 'playing' | 'dead' | 'won' | 'lost';
+export type SandboxStatus = "playing" | "dead" | "won" | "lost";
 
 export interface SandboxStats {
   mass: number;
@@ -52,13 +52,25 @@ export class Sandbox {
   }
 
   restart(): void {
-    const players = [{ name: 'You' }, ...Array.from({ length: this.botCount }, (_, i) => ({ name: `Bot ${i + 1}`, isBot: true }))];
+    const players = [
+      { name: "You" },
+      ...Array.from({ length: this.botCount }, (_, i) => ({ name: `Bot ${i + 1}`, isBot: true })),
+    ];
     this.state = createGame(players, this.cfg, (Math.random() * 2 ** 31) | 0);
     this.prev = this.state;
     this.player.resetAim(this.state.snakes[0]!.angle);
     // Your equipped skin; bots get random ones.
     const mine = useAccount.getState().profile?.equippedSkin ?? DEFAULT_SKIN;
-    this.renderer.setSkins(new Map(this.state.snakes.map((s) => [s.id, s.id === PLAYER_ID ? mine : PUBLIC_SKINS[Math.floor(Math.random() * PUBLIC_SKINS.length)]!.id])));
+    this.renderer.setSkins(
+      new Map(
+        this.state.snakes.map((s) => [
+          s.id,
+          s.id === PLAYER_ID
+            ? mine
+            : PUBLIC_SKINS[Math.floor(Math.random() * PUBLIC_SKINS.length)]!.id,
+        ]),
+      ),
+    );
     this.placement = 0;
     this.acc = 0;
   }
@@ -83,17 +95,17 @@ export class Sandbox {
     this.state = step(this.state, this.inputs, this.cfg);
 
     for (const e of this.state.events) {
-      if (e.type === 'eat' && e.snakeId === PLAYER_ID) haptic('eat');
-      else if (e.type === 'death' && e.snakeId === PLAYER_ID) {
+      if (e.type === "eat" && e.snakeId === PLAYER_ID) haptic("eat");
+      else if (e.type === "death" && e.snakeId === PLAYER_ID) {
         this.placement = this.state.snakes.filter((s) => s.alive).length + 1;
-        haptic('death');
-        sfx('death');
-      } else if (e.type === 'death' && e.killerId === PLAYER_ID) {
-        haptic('kill');
-        sfx('kill');
-      } else if (e.type === 'win' && e.snakeId === PLAYER_ID) {
-        haptic('win');
-        sfx('win');
+        haptic("death");
+        sfx("death");
+      } else if (e.type === "death" && e.killerId === PLAYER_ID) {
+        haptic("kill");
+        sfx("kill");
+      } else if (e.type === "win" && e.snakeId === PLAYER_ID) {
+        haptic("win");
+        sfx("win");
       }
     }
     this.emitStats();
@@ -102,8 +114,8 @@ export class Sandbox {
   private emitStats(): void {
     const me = this.state.snakes.find((s) => s.id === PLAYER_ID)!;
     const alive = this.state.snakes.filter((s) => s.alive).length;
-    let status: SandboxStatus = me.alive ? 'playing' : 'dead';
-    if (this.state.finished) status = this.state.winnerId === PLAYER_ID ? 'won' : 'lost';
+    let status: SandboxStatus = me.alive ? "playing" : "dead";
+    if (this.state.finished) status = this.state.winnerId === PLAYER_ID ? "won" : "lost";
     this.onStats({
       mass: Math.round(me.mass),
       alive,

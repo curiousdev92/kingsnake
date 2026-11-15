@@ -1,10 +1,10 @@
-import { matchMaker, Room, type Client } from '@colyseus/core';
-import { verifyPlayerToken } from '@snake/auth';
-import { MODES, queueRoomName, type GameMode } from '@snake/game-modes';
-import { START_RATING } from '@snake/meta';
-import { MATCHED_MESSAGE, QUEUE_MESSAGE, type QueueMsg } from '@snake/protocol';
-import { ArenaRoom, type JoinOptions } from './ArenaRoom';
-import { QUEUE_SECRET, pairPlayers, type Waiting } from './matchmaking';
+import { matchMaker, Room, type Client } from "@colyseus/core";
+import { verifyPlayerToken } from "@snake/auth";
+import { MODES, queueRoomName, type GameMode } from "@snake/game-modes";
+import { START_RATING } from "@snake/meta";
+import { MATCHED_MESSAGE, QUEUE_MESSAGE, type QueueMsg } from "@snake/protocol";
+import { ArenaRoom, type JoinOptions } from "./ArenaRoom";
+import { QUEUE_SECRET, pairPlayers, type Waiting } from "./matchmaking";
 
 const PAIR_INTERVAL_MS = 500;
 
@@ -33,10 +33,18 @@ export class QueueRoom extends Room {
   }
 
   override async onJoin(client: Client, options: JoinOptions = {}) {
-    const accountId: string | null = (client.auth as { accountId?: string | null } | undefined)?.accountId ?? null;
+    const accountId: string | null =
+      (client.auth as { accountId?: string | null } | undefined)?.accountId ?? null;
     // Anonymous players queue at the starting rating; their matches are never ranked.
-    const rating = (accountId && (await ArenaRoom.meta.lookupPlayer(accountId))?.rating) || START_RATING;
-    this.waiting.set(client.sessionId, { id: client.sessionId, rating, since: Date.now(), client, options: { name: options.name, token: options.token } });
+    const rating =
+      (accountId && (await ArenaRoom.meta.lookupPlayer(accountId))?.rating) || START_RATING;
+    this.waiting.set(client.sessionId, {
+      id: client.sessionId,
+      rating,
+      since: Date.now(),
+      client,
+      options: { name: options.name, token: options.token },
+    });
     client.send(QUEUE_MESSAGE, { rating, waiting: this.waiting.size } satisfies QueueMsg);
   }
 
@@ -50,11 +58,13 @@ export class QueueRoom extends Room {
       for (const e of entries) this.waiting.delete(e.id);
       try {
         const room = await matchMaker.createRoom(this.mode.room, { queued: QUEUE_SECRET });
-        for (const e of entries) e.client.send(MATCHED_MESSAGE, await matchMaker.reserveSeatFor(room, e.options));
+        for (const e of entries)
+          e.client.send(MATCHED_MESSAGE, await matchMaker.reserveSeatFor(room, e.options));
       } catch (err) {
         // Put them back at the front of the line and try again next round.
-        console.error('queue: could not start a match', err);
-        for (const e of entries) if (this.clients.some((c) => c.sessionId === e.id)) this.waiting.set(e.id, e);
+        console.error("queue: could not start a match", err);
+        for (const e of entries)
+          if (this.clients.some((c) => c.sessionId === e.id)) this.waiting.set(e.id, e);
       }
     }
   }
