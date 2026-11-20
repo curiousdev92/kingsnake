@@ -1,5 +1,5 @@
-import type { IconName } from "./Icon";
 import { Button, type ButtonProps } from "./Button";
+import type { IconName } from "./Icon";
 import { Icon } from "./Icon";
 
 export interface IconButtonProps extends Omit<ButtonProps, "children"> {
@@ -23,8 +23,8 @@ export function IconButton({
       variant={variant}
       aria-label={label}
       title={label}
-      className={`p-0 ${className}`}
-      style={{ width: size, height: size, ...style }}
+      className={`[&_.ui-btn-3d-front]:p-0 [&_.ui-btn-3d-front]:w-full [&_.ui-btn-3d-front]:h-full ${className}`}
+      style={{ ...style }}
     >
       <Icon name={icon} size={Math.round(size * 0.5)} />
     </Button>

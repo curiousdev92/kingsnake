@@ -186,16 +186,14 @@ export function Shop({ open, onClose }: { open: boolean; onClose: () => void }) 
             >
               <SkinSwatch skin={skin} />
               <span className="flex-1 text-sm">{skin.name}</span>
-              {equipped ? (
-                <span className={small}>Equipped</span>
-              ) : owned ? (
+              {owned || equipped ? (
                 <Button
                   variant="secondary"
-                  disabled={busy !== null}
+                  disabled={busy !== null || equipped}
                   onClick={() => act(skin.id, equipSkin)}
-                  className="px-3 py-1.5 text-xs"
+                  // className="px-3 py-1.5 text-xs"
                 >
-                  Equip
+                  {equipped ? "Equipped" : "Equip"}
                 </Button>
               ) : skin.exclusive ? (
                 <span className={small}>{skin.exclusive}</span>
@@ -383,7 +381,7 @@ function AuthForm() {
   };
 
   return (
-    <form className="grid gap-2" onSubmit={submit}>
+    <form className="grid gap-2 px-1" onSubmit={submit}>
       <h3 className="m-0 text-base ">Account</h3>
       <Tabs
         items={[

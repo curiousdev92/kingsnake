@@ -115,7 +115,7 @@ export function Home({ onJoin }: { onJoin: (j: JoinRequest) => void }) {
                   }
                   title="Get more coins"
                   onClick={() => setSheet("coins")}
-                  className="h-7 w-7 p-0 text-lg leading-none"
+                  className="text-lg leading-none"
                 >
                   +
                 </Button>

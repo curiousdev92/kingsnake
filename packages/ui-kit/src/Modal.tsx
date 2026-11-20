@@ -58,7 +58,8 @@ export function Modal({
             label="Close"
             size={32}
             onClick={onClose}
-            className="absolute right-3 top-3"
+            className="absolute! right-3 top-3"
+            variant="danger"
           />
         )}
         {title && (

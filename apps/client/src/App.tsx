@@ -34,7 +34,7 @@ export function App() {
       <div ref={host} className="absolute inset-0" />
       <Hud />
       {sandbox && <GameOver sandbox={sandbox} />}
-      <Button variant="secondary" onClick={goHome} className="absolute right-3 top-3 text-xs">
+      <Button variant="danger" onClick={goHome} className="absolute! right-3 top-3 text-xs">
         Leave
       </Button>
     </div>
