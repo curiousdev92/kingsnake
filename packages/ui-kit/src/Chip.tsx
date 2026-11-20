@@ -1,38 +1,25 @@
-import type { ChipKind } from "@snake/assets";
-import { token } from "@snake/design-tokens";
-import type { CSSProperties, HTMLAttributes } from "react";
-import { nineSliceStyle, resolveSkin, type Skin } from "./skin";
+import type { HTMLAttributes } from "react";
+
+export type ChipVariant = "default" | "gold" | "gem";
 
 export interface ChipProps extends HTMLAttributes<HTMLSpanElement> {
-  variant?: ChipKind;
-  /** Defaults to the manifest's `chip.<variant>.normal`; without art it renders from tokens. */
-  skin?: Skin<"normal">;
+  variant?: ChipVariant;
 }
 
-/** Small pill for labels and currency amounts. */
-export function Chip({ variant = "default", skin, style, ...rest }: ChipProps) {
-  const look: CSSProperties = nineSliceStyle(
-    resolveSkin(skin, `chip.${variant}`, ["normal"] as const),
-    "normal",
-  ) ?? {
-    background: token("color.surface"),
-    border: `${token("border.width")} solid ${variant === "default" ? token("color.textMuted") : token("color.border")}`,
-    borderRadius: token("radius.chip"),
+export function Chip({ variant = "default", className = "", ...rest }: ChipProps) {
+  const variants: Record<ChipVariant, string> = {
+    default: "bg-[var(--color-surface-muted)] border-[var(--color-border)]",
+    gold: "bg-amber-50 border-amber-200 text-amber-900",
+    gem: "bg-sky-50 border-sky-200 text-sky-900",
   };
   return (
     <span
       {...rest}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: token("space.xs"),
-        padding: `${token("space.xs")} ${token("space.md")}`,
-        color: token("color.text"),
-        fontSize: token("font.sizeSm"),
-        whiteSpace: "nowrap",
-        ...look,
-        ...style,
-      }}
+      className={[
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium text-[var(--color-fg)]",
+        variants[variant],
+        className,
+      ].join(" ")}
     />
   );
 }

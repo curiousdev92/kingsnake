@@ -1,5 +1,3 @@
-import { setManifest, shippedManifest, type AssetManifest, type NineSlice } from "@snake/assets";
-import { token } from "@snake/design-tokens";
 import {
   Badge,
   Button,
@@ -13,103 +11,32 @@ import {
 } from "@snake/ui-kit";
 import { useState, type ReactNode } from "react";
 
-/** Placeholder 9-slice art generated as SVG, to prove skins drop in without code changes. */
-function demoSlice(fill: string, stroke: string, r = 14): NineSlice {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
-    <rect x="3" y="3" width="58" height="58" rx="${r}" fill="${fill}" stroke="${stroke}" stroke-width="5"/>
-    <rect x="9" y="8" width="46" height="10" rx="5" fill="#fff" opacity="0.35"/></svg>`;
-  return {
-    src: `data:image/svg+xml,${encodeURIComponent(svg)}`,
-    slice: { left: 18, top: 18, right: 18, bottom: 18 },
-  };
-}
-
-const demoArt: AssetManifest = {
-  nineSlices: {
-    "button.primary.normal": demoSlice("#ffb703", "#7a4a00"),
-    "button.primary.pressed": demoSlice("#e09a00", "#7a4a00"),
-    "button.primary.disabled": demoSlice("#777", "#333"),
-    "button.secondary.normal": demoSlice("#3a86ff", "#0b2e6b"),
-    "button.secondary.pressed": demoSlice("#2a6fdc", "#0b2e6b"),
-    "button.icon.normal": demoSlice("#3a86ff", "#0b2e6b"),
-    "button.icon.pressed": demoSlice("#2a6fdc", "#0b2e6b"),
-    "panel.main.normal": demoSlice("#24314f", "#0d1426", 20),
-    "panel.inset.normal": demoSlice("#1a2440", "#0d1426"),
-    "panel.inset.selected": demoSlice("#2b3d6b", "#ffb703"),
-    "modal.frame.normal": demoSlice("#24314f", "#ffb703", 20),
-    "chip.gold.normal": demoSlice("#3d2c00", "#ffb703", 30),
-    "tab.normal": demoSlice("#1a2440", "#0d1426"),
-    "tab.selected": demoSlice("#ffb703", "#7a4a00"),
-  },
-  icons: {},
-};
-
-/** Every ui-kit component in one page. Open with `#ui`. */
+/** Component gallery. Open with `#ui`. */
 export function Gallery() {
-  const [art, setArt] = useState(false);
   const [modal, setModal] = useState(false);
   const [tab, setTab] = useState<"play" | "shop" | "profile">("play");
   const [coins, setCoins] = useState(1250);
   const [xp, setXp] = useState(0.35);
   const [selected, setSelected] = useState(0);
 
-  const toggleArt = () => {
-    setManifest(art ? shippedManifest : demoArt);
-    setArt(!art);
-  };
-
   return (
-    // Remount on art toggle so components re-read the manifest.
-    <div
-      key={String(art)}
-      style={{
-        height: "100%",
-        overflow: "auto",
-        background: token("color.background"),
-        color: token("color.text"),
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 720,
-          margin: "0 auto",
-          padding: token("space.lg"),
-          display: "grid",
-          gap: token("space.lg"),
-        }}
-      >
-        <header
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            flexWrap: "wrap",
-          }}
-        >
-          <h1
-            style={{ margin: 0, fontSize: token("font.sizeXl") }}
-          >
-            UI kit
-          </h1>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Button variant="secondary" onClick={toggleArt}>
-              {art ? "Use fallbacks" : "Try demo art"}
-            </Button>
-            <Button variant="secondary" onClick={() => (location.hash = "")}>
-              Back to game
-            </Button>
-          </div>
+    <div className="h-full overflow-auto bg-[var(--color-bg)] text-[var(--color-fg)]">
+      <div className="mx-auto grid max-w-3xl gap-5 p-5">
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="m-0 text-3xl ">UI</h1>
+          <Button variant="secondary" onClick={() => (location.hash = "")}>
+            Back to game
+          </Button>
         </header>
 
-        <Section title="Button">
-          <Button>Play</Button>
-          <Button variant="secondary">Shop</Button>
-          <Button variant="danger">Leave</Button>
-          <Button disabled>Locked</Button>
+        <Section title="Buttons">
+          <Button>Primary</Button>
+          <Button variant="secondary">Secondary</Button>
+          <Button variant="danger">Danger</Button>
+          <Button disabled>Disabled</Button>
         </Section>
 
-        <Section title="IconButton + Badge">
+        <Section title="Icon buttons & badges">
           <IconButton icon="icon.settings" label="Settings" />
           <Badge count={3}>
             <IconButton icon="icon.missions" label="Missions" />
@@ -122,7 +49,7 @@ export function Gallery() {
           </Badge>
         </Section>
 
-        <Section title="Chip + CurrencyPill">
+        <Section title="Chips & currency">
           <Chip>Level 7</Chip>
           <CurrencyPill currency="coin" amount={coins} />
           <CurrencyPill currency="gem" amount={42} />
@@ -131,8 +58,8 @@ export function Gallery() {
           </Button>
         </Section>
 
-        <Section title="ProgressBar">
-          <div style={{ display: "grid", gap: 10, width: "100%" }}>
+        <Section title="Progress">
+          <div className="grid w-full gap-3">
             <ProgressBar value={xp} label="XP" />
             <ProgressBar value={0.8} kind="health" label="Health" />
             <ProgressBar value={0.2} kind="timer" height={8} label="Timer" />
@@ -148,7 +75,7 @@ export function Gallery() {
         </Section>
 
         <Section title="Tabs">
-          <div style={{ width: "100%" }}>
+          <div className="w-full">
             <Tabs
               items={[
                 { value: "play", label: "Play" },
@@ -161,15 +88,15 @@ export function Gallery() {
           </div>
         </Section>
 
-        <Section title="Panel">
-          <div style={{ display: "grid", gap: 8, width: "100%" }}>
+        <Section title="Panels">
+          <div className="grid w-full gap-2">
             {["Daily mission: eat 500 pellets", "Daily mission: win a match"].map((m, i) => (
               <Panel
                 key={m}
                 variant="inset"
                 selected={selected === i}
                 onClick={() => setSelected(i)}
-                style={{ cursor: "pointer" }}
+                className="cursor-pointer"
               >
                 {m}
               </Panel>
@@ -183,7 +110,7 @@ export function Gallery() {
       </div>
 
       <Modal open={modal} onClose={() => setModal(false)} title="Reward">
-        <p style={{ marginTop: 0 }}>You earned 250 coins.</p>
+        <p className="mt-0">You earned 250 coins.</p>
         <Button onClick={() => setModal(false)}>Collect</Button>
       </Modal>
     </div>
@@ -192,21 +119,9 @@ export function Gallery() {
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <Panel>
-      <h2
-        style={{
-          margin: `0 0 ${token("space.md")}`,
-          fontSize: token("font.sizeMd"),
-          color: token("color.textMuted"),
-        }}
-      >
-        {title}
-      </h2>
-      <div
-        style={{ display: "flex", flexWrap: "wrap", gap: token("space.md"), alignItems: "center" }}
-      >
-        {children}
-      </div>
+    <Panel className="grid gap-3">
+      <h2 className="m-0 text-sm font-medium text-[var(--color-muted)]">{title}</h2>
+      <div className="flex flex-wrap items-center gap-3">{children}</div>
     </Panel>
   );
 }

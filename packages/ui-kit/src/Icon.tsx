@@ -1,4 +1,3 @@
-import type { IconName } from "@snake/assets";
 import type { LucideIcon } from "lucide-react";
 import {
   ChartColumn,
@@ -27,6 +26,33 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import type { ComponentPropsWithoutRef } from "react";
+
+export type IconName =
+  | "icon.coin"
+  | "icon.gem"
+  | "icon.xp"
+  | "icon.trophy"
+  | "icon.play"
+  | "icon.shop"
+  | "icon.profile"
+  | "icon.friends"
+  | "icon.missions"
+  | "icon.settings"
+  | "icon.leaderboard"
+  | "icon.close"
+  | "icon.back"
+  | "icon.copy"
+  | "icon.share"
+  | "icon.sound.on"
+  | "icon.sound.off"
+  | "icon.vibration"
+  | "icon.crown"
+  | "icon.skull"
+  | "icon.clock"
+  | "icon.heart"
+  | "icon.speed"
+  | "icon.shield";
 
 const ICONS: Record<IconName, LucideIcon> = {
   "icon.coin": Coins,
@@ -55,36 +81,22 @@ const ICONS: Record<IconName, LucideIcon> = {
   "icon.shield": Shield,
 };
 
-export function fallbackGlyph(name: IconName): string {
-  return name.split(".")[1]?.charAt(0).toUpperCase() ?? "?";
-}
-
-export interface IconProps {
+export interface IconProps extends Omit<ComponentPropsWithoutRef<"span">, "children"> {
   name: IconName;
   size?: number;
-  /** Accessible label; omit for decorative icons. */
   label?: string;
 }
 
-/** Renders a Lucide icon for the given semantic icon name. */
-export function Icon({ name, size = 20, label }: IconProps) {
+export function Icon({ name, size = 20, label, className = "", ...rest }: IconProps) {
   const Lucide = ICONS[name] ?? CircleHelp;
-  const a11y = label
-    ? ({ role: "img", "aria-label": label } as const)
-    : ({ "aria-hidden": true } as const);
+  const a11y = label ? { role: "img" as const, "aria-label": label } : { "aria-hidden": true as const };
   return (
     <span
       {...a11y}
+      {...rest}
       data-icon={name}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: size,
-        height: size,
-        color: "currentColor",
-        flexShrink: 0,
-      }}
+      className={`inline-flex shrink-0 items-center justify-center text-current ${className}`.trim()}
+      style={{ width: size, height: size, ...rest.style }}
     >
       <Lucide size={Math.round(size * 0.9)} strokeWidth={2.25} absoluteStrokeWidth />
     </span>

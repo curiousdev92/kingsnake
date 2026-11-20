@@ -1,74 +1,47 @@
-import { getNineSlice } from "@snake/assets";
-import { token } from "@snake/design-tokens";
-import { useEffect, useId, useRef, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { IconButton } from "./IconButton";
-import { ensureKeyframes } from "./motion";
-import { nineSliceStyle } from "./skin";
 
 export interface ModalProps {
   open: boolean;
   onClose: () => void;
   title?: string;
   children: ReactNode;
-  /** Close on backdrop click and Escape. Default true. */
   dismissible?: boolean;
   width?: number;
 }
 
-/** Centered dialog framed by `modal.frame.normal`, popping in with `motion.pop`. */
 export function Modal({
   open,
   onClose,
   title,
   children,
   dismissible = true,
-  width = 360,
+  width = 420,
 }: ModalProps) {
   const titleId = useId();
   const dialog = useRef<HTMLDivElement>(null);
 
-  useEffect(ensureKeyframes, []);
   useEffect(() => {
     if (!open) return;
-    const prevFocus = document.activeElement as HTMLElement | null;
+    const prev = document.activeElement as HTMLElement | null;
     dialog.current?.focus();
-    const onKey = (e: globalThis.KeyboardEvent) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && dismissible) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
-      prevFocus?.focus();
+      prev?.focus();
     };
   }, [open, dismissible, onClose]);
 
   if (!open || typeof document === "undefined") return null;
 
-  const frame: CSSProperties = nineSliceStyle(
-    { normal: getNineSlice("modal.frame.normal") },
-    "normal",
-  ) ?? {
-    background: token("color.surface"),
-    border: `${token("border.width")} solid ${token("color.border")}`,
-    borderRadius: token("radius.panel"),
-    boxShadow: token("shadow.panel"),
-  };
-
   return createPortal(
     <div
-      data-motion
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 animate-[ui-fade_120ms_ease-out]"
       onPointerDown={(e) => dismissible && e.target === e.currentTarget && onClose()}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 1000,
-        display: "grid",
-        placeItems: "center",
-        padding: token("space.lg"),
-        background: token("color.overlay"),
-        animation: `snake-fade ${token("motion.pop.duration")} ease-out`,
-      }}
     >
       <div
         ref={dialog}
@@ -76,36 +49,20 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
         tabIndex={-1}
-        data-motion
-        style={{
-          position: "relative",
-          width: "100%",
-          maxWidth: width,
-          boxSizing: "border-box",
-          padding: token("space.lg"),
-          color: token("color.text"),
-          outline: "none",
-          animation: `snake-pop ${token("motion.pop.duration")} ${token("motion.pop.easing")}`,
-          ...frame,
-        }}
+        className="relative w-full max-h-[85vh] overflow-auto rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 text-[var(--color-fg)] shadow-xl outline-none animate-[ui-pop_140ms_ease-out]"
+        style={{ maxWidth: width }}
       >
         {dismissible && (
           <IconButton
             icon="icon.close"
             label="Close"
-            size={36}
+            size={32}
             onClick={onClose}
-            style={{ position: "absolute", top: 8, right: 8 }}
+            className="absolute right-3 top-3"
           />
         )}
         {title && (
-          <h2
-            id={titleId}
-            style={{
-              margin: `0 0 ${token("space.md")}`,
-              fontSize: token("font.sizeLg"),
-            }}
-          >
+          <h2 id={titleId} className="m-0 mb-3 pr-10 text-lg ">
             {title}
           </h2>
         )}

@@ -1,4 +1,3 @@
-import { token } from "@snake/design-tokens";
 import {
   AVATARS,
   MAX_NAME_LENGTH,
@@ -10,8 +9,7 @@ import {
   type SnakeSkin,
 } from "@snake/meta";
 import { Badge, Button, CurrencyPill, Modal, Panel, ProgressBar, Tabs } from "@snake/ui-kit";
-import { useState, type CSSProperties, type FormEvent } from "react";
-import { sfx } from "./sound";
+import { useState, type FormEvent } from "react";
 import {
   ApiFailure,
   buySkin,
@@ -24,84 +22,59 @@ import {
   signOut,
   useAccount,
 } from "./account";
+import { sfx } from "./sound";
 
-const small = { fontSize: token("font.sizeSm"), color: token("color.textMuted") } as const;
-
-export const inputStyle: CSSProperties = {
-  boxSizing: "border-box",
-  width: "100%",
-  padding: `${token("space.sm")} ${token("space.md")}`,
-  background: token("color.background"),
-  color: token("color.text"),
-  border: `${token("border.width")} solid ${token("color.textMuted")}`,
-  borderRadius: token("radius.button"),
-  fontSize: token("font.sizeMd"),
-};
+const small = "text-sm text-[var(--color-muted)]";
+export const inputClass =
+  "w-full rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-fg)] outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/15";
 
 const errorText = (e: unknown, fallback: string) =>
   e instanceof ApiFailure ? e.message : fallback;
 
-/** Avatar glyph on its colour, until `avatar.<id>` art exists. */
+/** Avatar glyph on its colour, until avatar art exists. */
 export function AvatarBadge({ id, size = 40 }: { id: string; size?: number }) {
   const avatar = getAvatar(id) ?? AVATARS[0]!;
   return (
     <span
       aria-label={avatar.name}
       role="img"
-      style={{
-        width: size,
-        height: size,
-        flex: "none",
-        display: "inline-grid",
-        placeItems: "center",
-        borderRadius: "50%",
-        background: avatar.color,
-        color: "#000",
-        border: `${token("border.width")} solid #000`,
-        fontSize: size * 0.5,
-        fontWeight: 700,
-        lineHeight: 1,
-      }}
+      className="inline-grid shrink-0 place-items-center rounded-full border-2 border-black leading-none text-black"
+      style={{ width: size, height: size, background: avatar.color, fontSize: size * 0.5 }}
     >
       {avatar.glyph}
     </span>
   );
 }
 
-/** Avatar, name, level, XP bar and coins, opening the profile; or a note when the API is unreachable. */
 export function ProfileCard() {
   const { status, profile } = useAccount();
   const [open, setOpen] = useState(false);
-  if (status === "loading") return <div style={small}>Signing in…</div>;
+  if (status === "loading") return <div className={small}>Signing in…</div>;
   if (!profile)
-    return <div style={small}>Offline: you can play, but progress and rewards aren't saved.</div>;
+    return (
+      <div className={small}>Offline: you can play, but progress and rewards aren’t saved.</div>
+    );
   return (
-    <div style={{ display: "grid", gap: token("space.xs") }}>
-      <div style={{ display: "flex", alignItems: "center", gap: token("space.sm") }}>
+    <div className="grid gap-1.5">
+      <div className="flex items-center gap-2">
         <AvatarBadge id={profile.avatar} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis" }}>
-            {profile.name}
-          </div>
-          <div style={small}>
+        <div className="min-w-0 flex-1">
+          <div className="truncate ">{profile.name}</div>
+          <div className={small}>
             {profile.email ? "Signed in" : "Guest: sign up to keep your progress"}
           </div>
         </div>
-        <Button
-          variant="secondary"
-          onClick={() => setOpen(true)}
-          style={{ fontSize: token("font.sizeSm") }}
-        >
+        <Button variant="secondary" onClick={() => setOpen(true)} className="px-3 py-1.5 text-xs">
           Profile
         </Button>
       </div>
       <ProfileModal open={open} onClose={() => setOpen(false)} />
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <b>Level {profile.level}</b>
+      <div className="flex items-center justify-between">
+        <span className="text-sm">Level {profile.level}</span>
         <CurrencyPill currency="coin" amount={profile.coins} />
       </div>
       <ProgressBar value={profile.xpIntoLevel / profile.xpForNext} label="XP to next level" />
-      <div style={{ ...small, display: "flex", justifyContent: "space-between" }}>
+      <div className={`${small} flex justify-between`}>
         <span>
           {profile.xpIntoLevel} / {profile.xpForNext} XP
         </span>
@@ -119,15 +92,15 @@ export function DailyReward() {
   const [busy, setBusy] = useState(false);
   const [claimed, setClaimed] = useState<number | null>(null);
   if (!profile) return null;
-  if (claimed !== null) return <div style={small}>+{claimed} coins. See you tomorrow!</div>;
+  if (claimed !== null) return <div className={small}>+{claimed} coins. See you tomorrow!</div>;
   if (!profile.daily.available)
-    return <div style={small}>Daily reward claimed · day {profile.daily.streak} streak</div>;
+    return <div className={small}>Daily reward claimed · day {profile.daily.streak} streak</div>;
   return (
     <Badge count>
       <Button
         variant="secondary"
         disabled={busy}
-        style={{ width: "100%" }}
+        className="w-full"
         onClick={async () => {
           setBusy(true);
           try {
@@ -143,20 +116,18 @@ export function DailyReward() {
   );
 }
 
-/** Colour preview of a skin: a short row of body segments. */
 export function SkinSwatch({ skin, size = 14 }: { skin: SnakeSkin; size?: number }) {
   return (
-    <span aria-hidden style={{ display: "inline-flex" }}>
+    <span aria-hidden className="inline-flex">
       {Array.from({ length: 6 }, (_, k) => (
         <span
           key={k}
+          className="rounded-full border border-black"
           style={{
             width: size,
             height: size,
             marginLeft: k === 0 ? 0 : -size * 0.3,
-            borderRadius: "50%",
             background: skin.palette[Math.floor(k / skin.band) % skin.palette.length],
-            border: "1.5px solid #000",
           }}
         />
       ))}
@@ -199,12 +170,10 @@ export function Shop({ open, onClose }: { open: boolean; onClose: () => void }) 
 
   return (
     <Modal open={open} onClose={onClose} title="Skins" width={420}>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: token("space.md") }}>
+      <div className="mb-3 flex justify-end">
         <CurrencyPill currency="coin" amount={profile.coins} />
       </div>
-      <div
-        style={{ display: "grid", gap: token("space.sm"), maxHeight: "60vh", overflowY: "auto" }}
-      >
+      <div className="grid max-h-[60vh] gap-2 overflow-y-auto pr-1">
         {SKINS.map((skin) => {
           const owned = profile.owned.includes(skin.id);
           const equipped = profile.equippedSkin === skin.id;
@@ -213,28 +182,28 @@ export function Shop({ open, onClose }: { open: boolean; onClose: () => void }) 
               key={skin.id}
               variant="inset"
               selected={equipped}
-              style={{ display: "flex", alignItems: "center", gap: token("space.md") }}
+              className="flex items-center gap-3"
             >
               <SkinSwatch skin={skin} />
-              <span style={{ flex: 1 }}>{skin.name}</span>
+              <span className="flex-1 text-sm">{skin.name}</span>
               {equipped ? (
-                <span style={small}>Equipped</span>
+                <span className={small}>Equipped</span>
               ) : owned ? (
                 <Button
                   variant="secondary"
                   disabled={busy !== null}
                   onClick={() => act(skin.id, equipSkin)}
-                  style={{ fontSize: token("font.sizeSm") }}
+                  className="px-3 py-1.5 text-xs"
                 >
                   Equip
                 </Button>
               ) : skin.exclusive ? (
-                <span style={small}>{skin.exclusive}</span>
+                <span className={small}>{skin.exclusive}</span>
               ) : (
                 <Button
                   disabled={busy !== null || profile.coins < skin.price}
                   onClick={() => act(skin.id, buySkin)}
-                  style={{ fontSize: token("font.sizeSm") }}
+                  className="px-3 py-1.5 text-xs"
                 >
                   Buy {skin.price}
                 </Button>
@@ -243,34 +212,25 @@ export function Shop({ open, onClose }: { open: boolean; onClose: () => void }) 
           );
         })}
       </div>
-      {error && <div style={{ ...small, marginTop: token("space.md") }}>{error}</div>}
-      <div style={{ ...small, marginTop: token("space.md") }}>
+      {error && <div className={`${small} mt-3`}>{error}</div>}
+      <div className={`${small} mt-3`}>
         Earn coins by playing matches and claiming the daily reward.
       </div>
     </Modal>
   );
 }
 
-const section = { display: "grid", gap: token("space.sm") } as const;
-const heading = {
-  margin: 0,
-  fontSize: token("font.sizeMd"),
-} as const;
-
 function formatDuration(ms: number): string {
   const minutes = Math.floor(ms / 60_000);
   return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`;
 }
 
-/** The full profile: avatar, name, stats, ranked standing, and signing up, in or out. */
 export function ProfileModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const profile = useAccount((s) => s.profile);
   if (!profile) return null;
   return (
     <Modal open={open} onClose={onClose} title="Profile" width={420}>
-      <div
-        style={{ display: "grid", gap: token("space.lg"), maxHeight: "70vh", overflowY: "auto" }}
-      >
+      <div className="grid max-h-[70vh] gap-5 overflow-y-auto pr-1">
         <Identity key={profile.id} profile={profile} />
         <Stats profile={profile} />
         <Account profile={profile} />
@@ -299,27 +259,19 @@ function Identity({ profile }: { profile: Profile }) {
   };
 
   return (
-    <div style={section}>
-      <div style={{ display: "flex", alignItems: "center", gap: token("space.md") }}>
+    <div className="grid gap-2">
+      <div className="flex items-center gap-3">
         <AvatarBadge id={profile.avatar} size={64} />
-        <div style={{ display: "grid", gap: token("space.xs") }}>
-          <b style={{ fontSize: token("font.sizeLg") }}>
-            Level {profile.level}
-          </b>
+        <div className="grid gap-1">
+          <span className="text-xl">Level {profile.level}</span>
           {skin && (
-            <span
-              style={{ ...small, display: "flex", alignItems: "center", gap: token("space.xs") }}
-            >
+            <span className={`${small} flex items-center gap-1.5`}>
               <SkinSwatch skin={skin} size={12} /> {skin.name}
             </span>
           )}
         </div>
       </div>
-      <div
-        role="radiogroup"
-        aria-label="Avatar"
-        style={{ display: "flex", flexWrap: "wrap", gap: token("space.sm") }}
-      >
+      <div role="radiogroup" aria-label="Avatar" className="flex flex-wrap gap-2">
         {AVATARS.map((a) => (
           <button
             key={a.id}
@@ -327,27 +279,23 @@ function Identity({ profile }: { profile: Profile }) {
             aria-checked={profile.avatar === a.id}
             disabled={busy}
             onClick={() => profile.avatar !== a.id && run(() => setAvatar(a.id))}
-            style={{
-              padding: 2,
-              background: "none",
-              cursor: "pointer",
-              borderRadius: "50%",
-              border: `3px solid ${profile.avatar === a.id ? token("color.accent") : "transparent"}`,
-            }}
+            className={`cursor-pointer rounded-full border-[3px] bg-transparent p-0.5 ${
+              profile.avatar === a.id ? "border-[var(--color-accent)]" : "border-transparent"
+            }`}
           >
             <AvatarBadge id={a.id} size={36} />
           </button>
         ))}
       </div>
       <form
-        style={{ display: "flex", gap: token("space.sm") }}
+        className="flex gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           if (name.trim() && name.trim() !== profile.name) void run(() => rename(name.trim()));
         }}
       >
         <input
-          style={inputStyle}
+          className={inputClass}
           aria-label="Name"
           value={name}
           maxLength={MAX_NAME_LENGTH}
@@ -361,7 +309,7 @@ function Identity({ profile }: { profile: Profile }) {
           Save
         </Button>
       </form>
-      {error && <div style={small}>{error}</div>}
+      {error && <div className={small}>{error}</div>}
     </div>
   );
 }
@@ -377,21 +325,13 @@ function Stats({ profile }: { profile: Profile }) {
     ["Duel rating", season.rank === null ? profile.rating : `${profile.rating} · #${season.rank}`],
   ];
   return (
-    <div style={section}>
-      <h3 style={heading}>Stats</h3>
-      <div
-        style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: token("space.sm") }}
-      >
+    <div className="grid gap-2">
+      <h3 className="m-0 text-base ">Stats</h3>
+      <div className="grid grid-cols-3 gap-2">
         {items.map(([label, value]) => (
-          <Panel
-            key={label}
-            variant="inset"
-            style={{ textAlign: "center", padding: token("space.sm") }}
-          >
-            <div style={{ fontSize: token("font.sizeLg") }}>
-              {value}
-            </div>
-            <div style={small}>{label}</div>
+          <Panel key={label} variant="inset" className="p-2 text-center">
+            <div className="text-lg ">{value}</div>
+            <div className={small}>{label}</div>
           </Panel>
         ))}
       </div>
@@ -403,9 +343,9 @@ function Account({ profile }: { profile: Profile }) {
   const [busy, setBusy] = useState(false);
   if (profile.email) {
     return (
-      <div style={section}>
-        <h3 style={heading}>Account</h3>
-        <div style={small}>Signed in as {profile.email}</div>
+      <div className="grid gap-2">
+        <h3 className="m-0 text-base ">Account</h3>
+        <div className={small}>Signed in as {profile.email}</div>
         <Button
           variant="secondary"
           disabled={busy}
@@ -422,7 +362,6 @@ function Account({ profile }: { profile: Profile }) {
   return <AuthForm />;
 }
 
-/** Sign up (keeps this guest's progress) or log in to another account. */
 function AuthForm() {
   const [mode, setMode] = useState<"register" | "login">("register");
   const [email, setEmail] = useState("");
@@ -444,8 +383,8 @@ function AuthForm() {
   };
 
   return (
-    <form style={section} onSubmit={submit}>
-      <h3 style={heading}>Account</h3>
+    <form className="grid gap-2" onSubmit={submit}>
+      <h3 className="m-0 text-base ">Account</h3>
       <Tabs
         items={[
           { value: "register", label: "Sign up" },
@@ -457,13 +396,13 @@ function AuthForm() {
           setError(null);
         }}
       />
-      <div style={small}>
+      <div className={small}>
         {mode === "register"
           ? "Save this guest account with an email and password, so you can log in on any device."
           : "Switch to an account you already have. Progress on this guest stays with the guest."}
       </div>
       <input
-        style={inputStyle}
+        className={inputClass}
         type="email"
         autoComplete="email"
         placeholder="Email"
@@ -473,7 +412,7 @@ function AuthForm() {
         onChange={(e) => setEmail(e.target.value)}
       />
       <input
-        style={inputStyle}
+        className={inputClass}
         type="password"
         autoComplete={mode === "register" ? "new-password" : "current-password"}
         placeholder={
@@ -488,7 +427,7 @@ function AuthForm() {
       <Button type="submit" disabled={busy}>
         {mode === "register" ? "Create account" : "Log in"}
       </Button>
-      {error && <div style={small}>{error}</div>}
+      {error && <div className={small}>{error}</div>}
     </form>
   );
 }

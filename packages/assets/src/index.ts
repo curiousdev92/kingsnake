@@ -1,56 +1,12 @@
-import { manifest as shipped } from "../assets.manifest";
-import type {
-  AssetManifest,
-  IconName,
-  ImageSource,
-  NineSlice,
-  NineSliceName,
-  SkinArt,
-} from "./types";
+import { manifest } from "../assets.manifest";
+import type { AssetManifest, ImageSource, SkinArt } from "./types";
 
 export * from "./types";
-/** The manifest checked into the repo. */
-export { shipped as shippedManifest };
-
-let active: AssetManifest = shipped;
-
-/** Replaces the manifest in use (tests, or loading a remote manifest later). */
-export function setManifest(m: AssetManifest): void {
-  active = m;
-}
-
-/** The 9-slice for a name, or undefined so the caller renders its fallback. */
-export function getNineSlice(name: NineSliceName): NineSlice | undefined {
-  return active.nineSlices[name];
-}
-
-export function getIcon(name: IconName): ImageSource | undefined {
-  return active.icons[name];
-}
+export { manifest };
 
 /** Art for a snake skin, or undefined so the renderer draws palette circles. */
 export function getSkinArt(skinId: string): SkinArt | undefined {
-  return active.skins?.[skinId];
-}
-
-/**
- * Collects `<prefix>.<state>` entries into a state -> 9-slice map.
- * Returns undefined when no state has art, so components fall back to tokens.
- */
-export function skinFor<S extends string>(
-  prefix: string,
-  states: readonly S[],
-): Partial<Record<S, NineSlice>> | undefined {
-  const out: Partial<Record<S, NineSlice>> = {};
-  let found = false;
-  for (const s of states) {
-    const entry = active.nineSlices[`${prefix}.${s}` as NineSliceName];
-    if (entry) {
-      out[s] = entry;
-      found = true;
-    }
-  }
-  return found ? out : undefined;
+  return (manifest as AssetManifest).skins?.[skinId];
 }
 
 /** Picks the best export scale for the display, falling back to the nearest smaller one. */

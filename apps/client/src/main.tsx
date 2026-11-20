@@ -1,4 +1,4 @@
-import { applyTheme, themeMono } from "@snake/design-tokens";
+import "./index.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { initAccount } from "./account";
@@ -9,7 +9,6 @@ import { useRoute } from "./routes";
 import { SettingsPage } from "./Settings";
 import { installUiSounds } from "./sound";
 
-applyTheme(themeMono);
 void initAccount();
 installUiSounds();
 

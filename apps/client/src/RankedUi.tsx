@@ -1,4 +1,3 @@
-import { token } from "@snake/design-tokens";
 import {
   MAX_PAYOUT_DETAILS,
   MONTHLY_PRIZES,
@@ -20,17 +19,17 @@ import {
   fetchScoreBoard,
   useAccount,
 } from "./account";
-import { SkinSwatch, inputStyle } from "./AccountUi";
+import { SkinSwatch, inputClass } from "./AccountUi";
 import { sfx } from "./sound";
 
-const small = { fontSize: token("font.sizeSm"), color: token("color.textMuted") } as const;
+const small = "text-sm text-[var(--color-muted)]";
 
-/** Last season's reward, shown on the menu until it is claimed. */
 export function SeasonReward() {
   const reward = useAccount((s) => s.profile?.seasonReward ?? null);
   const [busy, setBusy] = useState(false);
   const [claimed, setClaimed] = useState<number | null>(null);
-  if (claimed !== null) return <div style={small}>+{claimed} coins. Good luck this season!</div>;
+  if (claimed !== null)
+    return <div className={small}>+{claimed} coins. Good luck this season!</div>;
   if (!reward) return null;
   const { standing } = reward;
   return (
@@ -38,7 +37,7 @@ export function SeasonReward() {
       <Button
         variant="secondary"
         disabled={busy}
-        style={{ width: "100%" }}
+        className="w-full"
         onClick={async () => {
           setBusy(true);
           try {
@@ -55,7 +54,6 @@ export function SeasonReward() {
   );
 }
 
-/** Last month's cash prize (top 3 on the monthly XP board): claim it, then wait for the manual payout. */
 export function MonthlyPrizeCard() {
   const profile = useAccount((s) => s.profile);
   const prize = profile?.monthlyPrize ?? null;
@@ -67,21 +65,21 @@ export function MonthlyPrizeCard() {
   const what = `${prize.month.name}: #${prize.rank} on the monthly board`;
   if (prize.status === "requested")
     return (
-      <div style={small}>
+      <div className={small}>
         {what}. Your ${prize.amountUsd} prize is on its way: we pay it by hand using the details you
         sent.
       </div>
     );
   if (prize.status === "paid")
     return (
-      <div style={small}>
+      <div className={small}>
         {what}. Your ${prize.amountUsd} prize has been paid. Congratulations!
       </div>
     );
   return (
     <>
       <Badge count>
-        <Button variant="secondary" style={{ width: "100%" }} onClick={() => setOpen(true)}>
+        <Button variant="secondary" className="w-full" onClick={() => setOpen(true)}>
           {what} · claim ${prize.amountUsd}
         </Button>
       </Badge>
@@ -92,7 +90,7 @@ export function MonthlyPrizeCard() {
         width={400}
       >
         <form
-          style={{ display: "grid", gap: token("space.md") }}
+          className="grid gap-3"
           onSubmit={async (e) => {
             e.preventDefault();
             setBusy(true);
@@ -115,19 +113,19 @@ export function MonthlyPrizeCard() {
             payout details.
           </div>
           {!profile.email && (
-            <div style={small}>
+            <div className={small}>
               You are playing as a guest. Sign up from your profile first, then come back to claim.
             </div>
           )}
           <input
-            style={inputStyle}
+            className={inputClass}
             aria-label="Payout details"
             value={details}
             maxLength={MAX_PAYOUT_DETAILS}
             placeholder="PayPal email or payout details"
             onChange={(e) => setDetails(e.target.value)}
           />
-          {error && <div style={small}>{error}</div>}
+          {error && <div className={small}>{error}</div>}
           <Button type="submit" disabled={busy || !profile.email || details.trim().length < 3}>
             Claim ${prize.amountUsd}
           </Button>
@@ -154,13 +152,10 @@ function daysLeft(endsAt: string): number {
 }
 
 type BoardTab = "overall" | "monthly" | "duel";
-
-/** A fetched board. Each is the top 50 plus your own line when you are below it. */
 type Loaded =
   | { tab: "overall" | "monthly"; board: ScoreBoard }
   | { tab: "duel"; board: Leaderboard };
 
-/** Three boards: everyone's XP across all modes (all time, and this month), and this month's ranked 1v1 duels. */
 export function LeaderboardModal({ onClose }: { onClose: () => void }) {
   const current = seasonAt(new Date());
   const [tab, setTab] = useState<BoardTab>("overall");
@@ -200,7 +195,7 @@ export function LeaderboardModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal open onClose={onClose} title="Leaderboards" width={440}>
-      <div style={{ display: "grid", gap: token("space.md") }}>
+      <div className="grid gap-3">
         <Tabs
           items={[
             { value: "overall", label: "All time" },
@@ -210,9 +205,9 @@ export function LeaderboardModal({ onClose }: { onClose: () => void }) {
           value={tab}
           onChange={(v) => setTab(v as BoardTab)}
         />
-        <div style={small}>{note}</div>
-        {error && <div style={small}>{error}</div>}
-        {!loaded && !error && <div style={small}>Loading…</div>}
+        <div className={small}>{note}</div>
+        {error && <div className={small}>{error}</div>}
+        {!loaded && !error && <div className={small}>Loading…</div>}
         {loaded && loaded.tab === tab && <BoardList loaded={loaded} />}
       </div>
     </Modal>
@@ -228,23 +223,21 @@ function BoardList({ loaded }: { loaded: Loaded }) {
 
   if (entries.length === 0) {
     return (
-      <div style={small}>
+      <div className={small}>
         {duel ? "No ranked duels yet. Be the first!" : "No matches played yet. Be the first!"}
       </div>
     );
   }
   return (
     <>
-      <div
-        style={{ display: "grid", gap: token("space.xs"), maxHeight: "50vh", overflowY: "auto" }}
-      >
+      <div className="grid max-h-[50vh] gap-1 overflow-y-auto pr-1">
         {entries.map((e) => (
           <div key={`${e.rank}-${e.name}`}>{row(e)}</div>
         ))}
       </div>
       {you && !entries.some((e) => e.you) && (
         <>
-          <div style={{ ...small, textAlign: "center" }}>…</div>
+          <div className={`${small} text-center`}>…</div>
           {row(you)}
         </>
       )}
@@ -262,24 +255,15 @@ function RowShell(p: {
 }) {
   const skin = getSkin(p.skin);
   return (
-    <Panel
-      variant="inset"
-      selected={p.you}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: token("space.sm"),
-        padding: token("space.sm"),
-      }}
-    >
-      <b style={{ width: 32, textAlign: "right" }}>{p.rank}</b>
+    <Panel variant="inset" selected={p.you} className="flex items-center gap-2 p-2">
+      <span className="w-8 text-right tabular-nums">{p.rank}</span>
       {skin && <SkinSwatch skin={skin} size={10} />}
-      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <span className="flex-1 truncate">
         {p.name}
         {p.you && " (you)"}
       </span>
-      <span style={small}>{p.detail}</span>
-      <b style={{ width: 56, textAlign: "right" }}>{p.value}</b>
+      <span className={small}>{p.detail}</span>
+      <span className="w-14 text-right tabular-nums">{p.value}</span>
     </Panel>
   );
 }

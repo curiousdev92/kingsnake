@@ -1,45 +1,27 @@
-import type { PanelKind } from "@snake/assets";
-import { token } from "@snake/design-tokens";
-import type { CSSProperties, HTMLAttributes } from "react";
-import { nineSliceStyle, resolveSkin, type Skin } from "./skin";
+import type { HTMLAttributes } from "react";
 
-export type PanelVariant = PanelKind | "inset";
+export type PanelVariant = "main" | "inset" | "dark" | "gold";
 
 export interface PanelProps extends HTMLAttributes<HTMLDivElement> {
-  /** `inset` is for list rows and slots; it supports `selected`. */
   variant?: PanelVariant;
   selected?: boolean;
-  /** 9-slice frame art. Defaults to the manifest's `panel.<variant>.*`; without art it renders from tokens. */
-  skin?: Skin<"normal" | "selected">;
 }
 
-const fallback: Record<PanelVariant, CSSProperties> = {
-  main: { background: token("color.surface") },
-  dark: { background: token("color.surfaceRaised") },
-  gold: { background: token("color.surface"), borderStyle: "double", borderWidth: "4px" },
-  inset: { background: token("color.surfaceRaised"), borderRadius: token("radius.button") },
-};
-
-export function Panel({ variant = "main", selected = false, skin, style, ...rest }: PanelProps) {
-  const state = selected ? "selected" : "normal";
-  const resolved = resolveSkin(skin, `panel.${variant}`, ["normal", "selected"] as const);
-  const look: CSSProperties = nineSliceStyle(resolved, state) ?? {
-    border: `${token("border.width")} solid ${selected ? token("color.accent") : token("color.border")}`,
-    borderRadius: token("radius.panel"),
-    boxShadow: token("shadow.panel"),
-    ...fallback[variant],
-    ...(variant === "inset" && !selected && { borderColor: token("color.textMuted") }),
+export function Panel({
+  variant = "main",
+  selected = false,
+  className = "",
+  ...rest
+}: PanelProps) {
+  const base = "rounded-[var(--radius-lg)] border bg-[var(--color-surface)] text-[var(--color-fg)]";
+  const variants: Record<PanelVariant, string> = {
+    main: "p-4 shadow-sm",
+    dark: "p-4 bg-[var(--color-surface-muted)] shadow-sm",
+    gold: "p-4 border-amber-300/70 shadow-sm",
+    inset: "rounded-[var(--radius-md)] p-3 bg-[var(--color-surface-muted)]",
   };
-  return (
-    <div
-      {...rest}
-      data-state={state}
-      style={{
-        color: token("color.text"),
-        padding: variant === "inset" ? token("space.md") : token("space.lg"),
-        ...look,
-        ...style,
-      }}
-    />
-  );
+  const selectedCls = selected
+    ? "border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]/10"
+    : "border-[var(--color-border)]";
+  return <div {...rest} className={[base, variants[variant], selectedCls, className].join(" ")} />;
 }

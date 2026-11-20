@@ -1,10 +1,17 @@
-import type { IconName } from "@snake/assets";
-import { token } from "@snake/design-tokens";
 import { MODES, getMode } from "@snake/game-modes";
-import { Button, Chip, CurrencyPill, Icon, IconButton, Modal, Panel } from "@snake/ui-kit";
+import {
+  Button,
+  Chip,
+  CurrencyPill,
+  Icon,
+  IconButton,
+  Modal,
+  Panel,
+  type IconName,
+} from "@snake/ui-kit";
 import { useState, type ReactNode } from "react";
 import { useAccount } from "./account";
-import { AvatarBadge, DailyReward, ProfileModal, Shop, inputStyle } from "./AccountUi";
+import { AvatarBadge, DailyReward, ProfileModal, Shop, inputClass } from "./AccountUi";
 import type { JoinRequest } from "./game/OnlineGame";
 import { LeaderboardModal, MonthlyPrizeCard, SeasonReward } from "./RankedUi";
 import { navigate } from "./routes";
@@ -19,7 +26,6 @@ export const normalizeCode = (c: string) =>
 const MODE_KEY = "snake.mode";
 const PRACTICE = "practice";
 
-/** Mode cards: the online modes plus offline practice. */
 const CARDS = [
   ...MODES.map((m) => ({
     id: m.id,
@@ -52,15 +58,9 @@ function saveCard(id: string): void {
   }
 }
 
-const small = { fontSize: token("font.sizeSm"), color: token("color.textMuted") } as const;
-
+const small = "text-sm text-[var(--color-muted)]";
 type Sheet = "profile" | "shop" | "leaderboard" | "coins" | "private" | null;
 
-/**
- * The home screen: resources and settings along the top, mode selection in the
- * middle, and shop, leaderboard and profile along the bottom. Nothing starts until
- * the player presses Play.
- */
 export function Home({ onJoin }: { onJoin: (j: JoinRequest) => void }) {
   const { status, profile } = useAccount();
   const [cardId, setCardId] = useState(savedCard);
@@ -79,59 +79,22 @@ export function Home({ onJoin }: { onJoin: (j: JoinRequest) => void }) {
       : onJoin({ kind: "quick", mode: getMode(card.id).id });
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        overflowY: "auto",
-        background: token("color.background"),
-        color: token("color.text"),
-      }}
-    >
-      <div
-        style={{
-          minHeight: "100%",
-          maxWidth: 480,
-          margin: "0 auto",
-          padding: 16,
-          boxSizing: "border-box",
-          display: "grid",
-          gridTemplateRows: "auto 1fr auto",
-          gap: token("space.lg"),
-        }}
-      >
-        {/* Top bar: who you are, what you have, settings. */}
-        <header style={{ display: "flex", alignItems: "center", gap: token("space.sm") }}>
+    <div className="fixed inset-0 overflow-y-auto bg-[var(--color-bg)] text-[var(--color-fg)]">
+      <div className="mx-auto grid min-h-full max-w-[480px] grid-rows-[auto_1fr_auto] gap-5 p-4">
+        <header className="flex items-center gap-2">
           <button
             onClick={() => online && setSheet("profile")}
             aria-label="Open profile"
-            style={{
-              flex: 1,
-              minWidth: 0,
-              display: "flex",
-              alignItems: "center",
-              gap: token("space.sm"),
-              padding: 0,
-              background: "none",
-              border: "none",
-              color: "inherit",
-              textAlign: "left",
-              cursor: online ? "pointer" : "default",
-            }}
+            className={`flex min-w-0 flex-1 items-center gap-2 border-0 bg-transparent p-0 text-left text-inherit ${
+              online ? "cursor-pointer" : "cursor-default"
+            }`}
           >
             <AvatarBadge id={profile?.avatar ?? "snake"} size={44} />
-            <span style={{ minWidth: 0 }}>
-              <b
-                style={{
-                  display: "block",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
+            <span className="min-w-0">
+              <span className="block truncate">
                 {profile?.name ?? (status === "loading" ? "Signing in…" : "Offline")}
-              </b>
-              <span style={small}>
+              </span>
+              <span className={small}>
                 {profile ? `Level ${profile.level}` : "Progress is not saved"}
               </span>
             </span>
@@ -140,9 +103,9 @@ export function Home({ onJoin }: { onJoin: (j: JoinRequest) => void }) {
             <>
               <Chip aria-label={`Duel rating ${profile.rating}`}>
                 <Icon name="icon.trophy" size={16} />
-                <span style={{ fontVariantNumeric: "tabular-nums" }}>{profile.rating}</span>
+                <span className="tabular-nums">{profile.rating}</span>
               </Chip>
-              <span style={{ display: "inline-flex", alignItems: "center" }}>
+              <span className="inline-flex items-center gap-1">
                 <CurrencyPill currency="coin" amount={profile.coins} />
                 <Button
                   aria-label={
@@ -152,14 +115,7 @@ export function Home({ onJoin }: { onJoin: (j: JoinRequest) => void }) {
                   }
                   title="Get more coins"
                   onClick={() => setSheet("coins")}
-                  style={{
-                    width: 28,
-                    height: 28,
-                    padding: 0,
-                    marginLeft: 4,
-                    lineHeight: 1,
-                    fontSize: token("font.sizeLg"),
-                  }}
+                  className="h-7 w-7 p-0 text-lg leading-none"
                 >
                   +
                 </Button>
@@ -169,26 +125,13 @@ export function Home({ onJoin }: { onJoin: (j: JoinRequest) => void }) {
           <IconButton icon="icon.settings" label="Settings" onClick={() => navigate("settings")} />
         </header>
 
-        {/* Centre: pick a mode, then play. */}
-        <main style={{ display: "grid", alignContent: "center", gap: token("space.md") }}>
-          <h1
-            style={{
-              margin: 0,
-              textAlign: "center",
-              fontSize: token("font.sizeXl"),
-            }}
-          >
-            KingSnake
-          </h1>
+        <main className="grid content-center gap-3">
+          <h1 className="m-0 text-center text-3xl ">KingSnake</h1>
           {profile && <XpBar xpIntoLevel={profile.xpIntoLevel} xpForNext={profile.xpForNext} />}
           <DailyReward />
           <SeasonReward />
           <MonthlyPrizeCard />
-          <div
-            role="radiogroup"
-            aria-label="Game mode"
-            style={{ display: "grid", gap: token("space.sm") }}
-          >
+          <div role="radiogroup" aria-label="Game mode" className="grid gap-2">
             {CARDS.map((c) => (
               <ModeCard
                 key={c.id}
@@ -200,14 +143,8 @@ export function Home({ onJoin }: { onJoin: (j: JoinRequest) => void }) {
               />
             ))}
           </div>
-          <Button
-            onClick={play}
-            style={{
-              fontSize: token("font.sizeLg"),
-              padding: `${token("space.md")} ${token("space.lg")}`,
-            }}
-          >
-            <span style={{ display: "inline-flex", alignItems: "center", gap: token("space.sm") }}>
+          <Button onClick={play} className="px-5 py-3 text-base">
+            <span className="inline-flex items-center gap-2">
               <Icon name="icon.play" size={20} /> Play {card.name}
             </span>
           </Button>
@@ -216,15 +153,8 @@ export function Home({ onJoin }: { onJoin: (j: JoinRequest) => void }) {
           </Button>
         </main>
 
-        {/* Bottom bar. */}
-        <Panel style={{ padding: token("space.sm") }}>
-          <nav
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: token("space.sm"),
-            }}
-          >
+        <Panel className="p-2">
+          <nav className="grid grid-cols-3 gap-2">
             <NavButton
               icon="icon.shop"
               label="Shop"
@@ -264,26 +194,15 @@ function XpBar({ xpIntoLevel, xpForNext }: { xpIntoLevel: number; xpForNext: num
   return (
     <div
       aria-label={`${xpIntoLevel} of ${xpForNext} XP to the next level`}
-      style={{ display: "flex", alignItems: "center", gap: token("space.sm") }}
+      className="flex items-center gap-2"
     >
-      <div
-        style={{
-          flex: 1,
-          height: 6,
-          borderRadius: 3,
-          background: token("color.surfaceRaised"),
-          overflow: "hidden",
-        }}
-      >
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--color-surface-muted)]">
         <div
-          style={{
-            width: `${(100 * xpIntoLevel) / xpForNext}%`,
-            height: "100%",
-            background: token("color.accent"),
-          }}
+          className="h-full rounded-full bg-[var(--color-accent)]"
+          style={{ width: `${(100 * xpIntoLevel) / xpForNext}%` }}
         />
       </div>
-      <span style={small}>
+      <span className={small}>
         {xpIntoLevel} / {xpForNext} XP
       </span>
     </div>
@@ -308,26 +227,13 @@ function ModeCard(props: {
       onKeyDown={(e) =>
         (e.key === "Enter" || e.key === " ") && (e.preventDefault(), props.onSelect())
       }
-      style={{
-        cursor: "pointer",
-        display: "grid",
-        gap: token("space.xs"),
-        padding: token("space.md"),
-        outline: props.selected ? `3px solid ${token("color.accent")}` : undefined,
-      }}
+      className={`grid cursor-pointer gap-1 p-3 ${props.selected ? "outline-none" : ""}`}
     >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: token("space.sm"),
-        }}
-      >
-        <b style={{ fontSize: token("font.sizeLg") }}>{props.name}</b>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-lg ">{props.name}</span>
         <Chip>{props.tag}</Chip>
       </div>
-      <span style={small}>{props.description}</span>
+      <span className={small}>{props.description}</span>
     </Panel>
   );
 }
@@ -344,15 +250,8 @@ function NavButton({
   disabled?: boolean;
 }) {
   return (
-    <Button
-      variant="secondary"
-      disabled={disabled}
-      onClick={onClick}
-      style={{ padding: token("space.sm") }}
-    >
-      <span
-        style={{ display: "grid", justifyItems: "center", gap: 2, fontSize: token("font.sizeSm") }}
-      >
+    <Button variant="secondary" disabled={disabled} onClick={onClick} className="p-2">
+      <span className="grid justify-items-center gap-0.5 text-xs">
         <Icon name={icon} size={24} />
         {label}
       </span>
@@ -373,12 +272,11 @@ function Sheet({
 }) {
   return (
     <Modal open={open} onClose={onClose} title={title} width={380}>
-      <div style={{ display: "grid", gap: token("space.md") }}>{children}</div>
+      <div className="grid gap-3">{children}</div>
     </Modal>
   );
 }
 
-/** Where coins come from. There is nothing to buy with money: coins are earned. */
 function CoinsModal({
   open,
   onClose,
@@ -392,12 +290,12 @@ function CoinsModal({
   if (!profile) return null;
   return (
     <Sheet open={open} onClose={onClose} title="Coins">
-      <div style={{ display: "flex", justifyContent: "center" }}>
+      <div className="flex justify-center">
         <CurrencyPill currency="coin" amount={profile.coins} />
       </div>
       <DailyReward />
       <SeasonReward />
-      <div style={small}>
+      <div className={small}>
         Earn more by playing: every match pays coins and XP, more for kills and a better placement.
       </div>
       <Button variant="secondary" onClick={onShop}>
@@ -422,19 +320,21 @@ function PrivateRoomModal({
   const mode = getMode(modeId);
   return (
     <Sheet open={open} onClose={onClose} title="Play with friends">
-      <div style={small}>Create a private room and share its code, or join a friend's room.</div>
+      <div className={small}>
+        Create a private room and share its code, or join a friend’s room.
+      </div>
       <Button onClick={() => onJoin({ kind: "create", mode: mode.id })}>
         Create private room · {mode.name}
       </Button>
       <form
-        style={{ display: "flex", gap: token("space.sm") }}
+        className="flex gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           if (code.length === CODE_LENGTH) onJoin({ kind: "code", code });
         }}
       >
         <input
-          style={{ ...inputStyle, textTransform: "uppercase", letterSpacing: "0.15em" }}
+          className={`${inputClass} uppercase tracking-[0.15em]`}
           value={code}
           placeholder="Room code"
           aria-label="Room code"

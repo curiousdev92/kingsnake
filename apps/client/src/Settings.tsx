@@ -1,47 +1,21 @@
-import { token } from "@snake/design-tokens";
 import { MAX_NAME_LENGTH } from "@snake/meta";
 import { Button, IconButton, Panel } from "@snake/ui-kit";
 import { useState, type ReactNode } from "react";
-import { ProfileModal, inputStyle } from "./AccountUi";
+import { ProfileModal, inputClass } from "./AccountUi";
 import { ApiFailure, rename, saveName, savedName, signOut, useAccount } from "./account";
 import { hapticsEnabled, setHapticsEnabled } from "./haptics";
 import { goHome } from "./routes";
 import { setSoundEnabled, setSoundVolume, sfx, soundEnabled, soundVolume } from "./sound";
 
-const small = { fontSize: token("font.sizeSm"), color: token("color.textMuted") } as const;
+const small = "text-sm text-[var(--color-muted)]";
 
-/**
- * Player preferences only. The game's tuning is fixed for everyone and is not a
- * setting (see game-core `defaultConfig`).
- */
 export function SettingsPage() {
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        overflowY: "auto",
-        background: token("color.background"),
-        color: token("color.text"),
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 480,
-          margin: "0 auto",
-          padding: 16,
-          boxSizing: "border-box",
-          display: "grid",
-          gap: token("space.lg"),
-        }}
-      >
-        <header style={{ display: "flex", alignItems: "center", gap: token("space.md") }}>
+    <div className="fixed inset-0 overflow-y-auto bg-[var(--color-bg)] text-[var(--color-fg)]">
+      <div className="mx-auto grid max-w-[480px] gap-5 p-4">
+        <header className="flex items-center gap-3">
           <IconButton icon="icon.back" label="Back to home" onClick={goHome} />
-          <h1
-            style={{ margin: 0, fontSize: token("font.sizeXl") }}
-          >
-            Settings
-          </h1>
+          <h1 className="m-0 text-3xl ">Settings</h1>
         </header>
         <NameSetting />
         <Section title="Sound">
@@ -65,23 +39,11 @@ export function SettingsPage() {
           />
         </Section>
         <Section title="Controls">
-          <dl
-            style={{
-              margin: 0,
-              display: "grid",
-              gridTemplateColumns: "auto 1fr",
-              gap: `${token("space.xs")} ${token("space.md")}`,
-              ...small,
-            }}
-          >
-            <dt>Steer</dt>
-            <dd style={{ margin: 0 }}>
-              Move the mouse, WASD or arrow keys; on touch, drag anywhere
-            </dd>
-            <dt>Boost</dt>
-            <dd style={{ margin: 0 }}>
-              Hold the mouse button or Space; on touch, the boost button
-            </dd>
+          <dl className={`m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 ${small}`}>
+            <dt className="font-medium text-[var(--color-fg)]">Steer</dt>
+            <dd className="m-0">Move the mouse, WASD or arrow keys; on touch, drag anywhere</dd>
+            <dt className="font-medium text-[var(--color-fg)]">Boost</dt>
+            <dd className="m-0">Hold the mouse button or Space; on touch, the boost button</dd>
           </dl>
         </Section>
         <AccountSetting />
@@ -92,10 +54,8 @@ export function SettingsPage() {
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <Panel style={{ display: "grid", gap: token("space.sm") }}>
-      <h2 style={{ margin: 0, fontSize: token("font.sizeMd") }}>
-        {title}
-      </h2>
+    <Panel className="grid gap-2">
+      <h2 className="m-0 text-base ">{title}</h2>
       {children}
     </Panel>
   );
@@ -114,12 +74,10 @@ function Toggle({
 }) {
   const [on, setOn] = useState(initial);
   return (
-    <label
-      style={{ display: "flex", alignItems: "center", gap: token("space.md"), cursor: "pointer" }}
-    >
-      <span style={{ flex: 1, display: "grid" }}>
-        <span>{label}</span>
-        <span style={small}>{hint}</span>
+    <label className="flex cursor-pointer items-center gap-3">
+      <span className="grid flex-1">
+        <span className="text-sm font-medium">{label}</span>
+        <span className={small}>{hint}</span>
       </span>
       <input
         type="checkbox"
@@ -129,7 +87,7 @@ function Toggle({
           setOn(e.target.checked);
           onChange(e.target.checked);
         }}
-        style={{ width: 22, height: 22, accentColor: token("color.accent") }}
+        className="h-5 w-5 accent-[var(--color-accent)]"
       />
     </label>
   );
@@ -138,8 +96,8 @@ function Toggle({
 function VolumeSlider() {
   const [volume, setVolume] = useState(soundVolume);
   return (
-    <label style={{ display: "flex", alignItems: "center", gap: token("space.md") }}>
-      <span style={{ flex: 1 }}>Volume</span>
+    <label className="flex items-center gap-3">
+      <span className="flex-1 text-sm font-medium">Volume</span>
       <input
         type="range"
         min={0}
@@ -151,15 +109,14 @@ function VolumeSlider() {
           const v = Number(e.target.value);
           setVolume(v);
           setSoundVolume(v);
-          sfx("eat"); // a preview at the new level
+          sfx("eat");
         }}
-        style={{ width: 160, accentColor: token("color.accent") }}
+        className="w-40 accent-[var(--color-accent)]"
       />
     </label>
   );
 }
 
-/** The player's display name: saved to the account, or locally while offline. */
 function NameSetting() {
   const profile = useAccount((s) => s.profile);
   const current = profile?.name ?? savedName();
@@ -170,7 +127,7 @@ function NameSetting() {
   return (
     <Section title="Name">
       <form
-        style={{ display: "flex", gap: token("space.sm") }}
+        className="flex gap-2"
         onSubmit={async (e) => {
           e.preventDefault();
           setNote(null);
@@ -184,7 +141,7 @@ function NameSetting() {
         }}
       >
         <input
-          style={inputStyle}
+          className={inputClass}
           aria-label="Name"
           value={name}
           maxLength={MAX_NAME_LENGTH}
@@ -195,7 +152,7 @@ function NameSetting() {
           Save
         </Button>
       </form>
-      {note && <div style={small}>{note}</div>}
+      {note && <div className={small}>{note}</div>}
     </Section>
   );
 }
@@ -206,7 +163,7 @@ function AccountSetting() {
   const [busy, setBusy] = useState(false);
   return (
     <Section title="Account">
-      <div style={small}>
+      <div className={small}>
         {status === "loading"
           ? "Signing in…"
           : !profile

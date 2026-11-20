@@ -1,34 +1,10 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { manifest } from "../assets.manifest";
-import { getIcon, getNineSlice, getSkinArt, resolveSrc, setManifest, skinFor } from "../src";
-
-const slice = { left: 8, top: 8, right: 8, bottom: 8 };
-
-afterEach(() => setManifest(manifest));
+import { describe, expect, it } from "vitest";
+import { getSkinArt, manifest, resolveSrc } from "../src";
 
 describe("manifest lookups", () => {
-  it("returns undefined for missing art so callers fall back", () => {
-    expect(getNineSlice("button.primary.normal")).toBeUndefined();
-    expect(getIcon("icon.coin")).toBeUndefined();
-    expect(skinFor("button.primary", ["normal", "pressed"])).toBeUndefined();
-  });
-
-  it("builds a skin from whichever states have art", () => {
-    setManifest({
-      nineSlices: { "button.primary.normal": { src: "n.png", slice } },
-      icons: {},
-    });
-    expect(skinFor("button.primary", ["normal", "pressed", "disabled"])).toEqual({
-      normal: { src: "n.png", slice },
-    });
-  });
-
-  it("looks up snake skin art by skin id, undefined without art", () => {
+  it("returns undefined for missing skin art so callers fall back", () => {
     expect(getSkinArt("ember")).toBeUndefined();
-    const art = { atlas: "/skins/skin.ember.json" };
-    setManifest({ nineSlices: {}, icons: {}, skins: { ember: art } });
-    expect(getSkinArt("ember")).toBe(art);
-    expect(getSkinArt("mint")).toBeUndefined();
+    expect(manifest.skins).toEqual({});
   });
 });
 

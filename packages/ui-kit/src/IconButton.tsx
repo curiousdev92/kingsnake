@@ -1,21 +1,19 @@
-import type { IconName } from "@snake/assets";
-import { token } from "@snake/design-tokens";
+import type { IconName } from "./Icon";
 import { Button, type ButtonProps } from "./Button";
 import { Icon } from "./Icon";
 
-export interface IconButtonProps extends Omit<ButtonProps, "children" | "skinPrefix"> {
+export interface IconButtonProps extends Omit<ButtonProps, "children"> {
   icon: IconName;
-  /** Required: icon-only buttons need an accessible name. */
   label: string;
   size?: number;
 }
 
-/** Square button skinned from `button.icon.*`. */
 export function IconButton({
   icon,
   label,
-  size = 44,
+  size = 40,
   variant = "secondary",
+  className = "",
   style,
   ...rest
 }: IconButtonProps) {
@@ -23,18 +21,10 @@ export function IconButton({
     <Button
       {...rest}
       variant={variant}
-      skinPrefix="button.icon"
       aria-label={label}
       title={label}
-      style={{
-        width: size,
-        height: size,
-        padding: 0,
-        display: "inline-grid",
-        placeItems: "center",
-        borderRadius: token("radius.button"),
-        ...style,
-      }}
+      className={`p-0 ${className}`}
+      style={{ width: size, height: size, ...style }}
     >
       <Icon name={icon} size={Math.round(size * 0.5)} />
     </Button>
