@@ -1,10 +1,10 @@
 import type { IconName } from "@snake/assets";
 import { token } from "@snake/design-tokens";
 import { MODES, getMode } from "@snake/game-modes";
-import { Button, CurrencyPill, Chip, Icon, IconButton, Modal, Panel } from "@snake/ui-kit";
+import { Button, Chip, CurrencyPill, Icon, IconButton, Modal, Panel } from "@snake/ui-kit";
 import { useState, type ReactNode } from "react";
-import { AvatarBadge, DailyReward, ProfileModal, Shop, inputStyle } from "./AccountUi";
 import { useAccount } from "./account";
+import { AvatarBadge, DailyReward, ProfileModal, Shop, inputStyle } from "./AccountUi";
 import type { JoinRequest } from "./game/OnlineGame";
 import { LeaderboardModal, MonthlyPrizeCard, SeasonReward } from "./RankedUi";
 import { navigate } from "./routes";
@@ -115,7 +115,6 @@ export function Home({ onJoin }: { onJoin: (j: JoinRequest) => void }) {
               background: "none",
               border: "none",
               color: "inherit",
-              font: "inherit",
               textAlign: "left",
               cursor: online ? "pointer" : "default",
             }}
@@ -176,7 +175,6 @@ export function Home({ onJoin }: { onJoin: (j: JoinRequest) => void }) {
             style={{
               margin: 0,
               textAlign: "center",
-              fontFamily: token("font.display"),
               fontSize: token("font.sizeXl"),
             }}
           >
@@ -326,9 +324,7 @@ function ModeCard(props: {
           gap: token("space.sm"),
         }}
       >
-        <b style={{ fontFamily: token("font.display"), fontSize: token("font.sizeLg") }}>
-          {props.name}
-        </b>
+        <b style={{ fontSize: token("font.sizeLg") }}>{props.name}</b>
         <Chip>{props.tag}</Chip>
       </div>
       <span style={small}>{props.description}</span>

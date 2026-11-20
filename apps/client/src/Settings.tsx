@@ -38,7 +38,7 @@ export function SettingsPage() {
         <header style={{ display: "flex", alignItems: "center", gap: token("space.md") }}>
           <IconButton icon="icon.back" label="Back to home" onClick={goHome} />
           <h1
-            style={{ margin: 0, fontFamily: token("font.display"), fontSize: token("font.sizeXl") }}
+            style={{ margin: 0, fontSize: token("font.sizeXl") }}
           >
             Settings
           </h1>
@@ -93,7 +93,7 @@ export function SettingsPage() {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Panel style={{ display: "grid", gap: token("space.sm") }}>
-      <h2 style={{ margin: 0, fontFamily: token("font.display"), fontSize: token("font.sizeMd") }}>
+      <h2 style={{ margin: 0, fontSize: token("font.sizeMd") }}>
         {title}
       </h2>
       {children}

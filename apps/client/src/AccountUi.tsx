@@ -35,7 +35,6 @@ export const inputStyle: CSSProperties = {
   color: token("color.text"),
   border: `${token("border.width")} solid ${token("color.textMuted")}`,
   borderRadius: token("radius.button"),
-  fontFamily: token("font.body"),
   fontSize: token("font.sizeMd"),
 };
 
@@ -98,7 +97,7 @@ export function ProfileCard() {
       </div>
       <ProfileModal open={open} onClose={() => setOpen(false)} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <b style={{ fontFamily: token("font.display") }}>Level {profile.level}</b>
+        <b>Level {profile.level}</b>
         <CurrencyPill currency="coin" amount={profile.coins} />
       </div>
       <ProgressBar value={profile.xpIntoLevel / profile.xpForNext} label="XP to next level" />
@@ -255,7 +254,6 @@ export function Shop({ open, onClose }: { open: boolean; onClose: () => void }) 
 const section = { display: "grid", gap: token("space.sm") } as const;
 const heading = {
   margin: 0,
-  fontFamily: token("font.display"),
   fontSize: token("font.sizeMd"),
 } as const;
 
@@ -305,7 +303,7 @@ function Identity({ profile }: { profile: Profile }) {
       <div style={{ display: "flex", alignItems: "center", gap: token("space.md") }}>
         <AvatarBadge id={profile.avatar} size={64} />
         <div style={{ display: "grid", gap: token("space.xs") }}>
-          <b style={{ fontFamily: token("font.display"), fontSize: token("font.sizeLg") }}>
+          <b style={{ fontSize: token("font.sizeLg") }}>
             Level {profile.level}
           </b>
           {skin && (
@@ -390,7 +388,7 @@ function Stats({ profile }: { profile: Profile }) {
             variant="inset"
             style={{ textAlign: "center", padding: token("space.sm") }}
           >
-            <div style={{ fontFamily: token("font.display"), fontSize: token("font.sizeLg") }}>
+            <div style={{ fontSize: token("font.sizeLg") }}>
               {value}
             </div>
             <div style={small}>{label}</div>

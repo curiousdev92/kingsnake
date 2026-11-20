@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@snake/assets": "workspace:*",
-    "@snake/design-tokens": "workspace:*"
+    "@snake/design-tokens": "workspace:*",
+    "lucide-react": "^0.577.0"
   },
   "devDependencies": {
     "@snake/config": "workspace:*",

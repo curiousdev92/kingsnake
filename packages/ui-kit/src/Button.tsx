@@ -37,7 +37,6 @@ export function Button({
   const state: ButtonState = disabled ? "disabled" : pressed ? "pressed" : "normal";
 
   const base: CSSProperties = {
-    fontFamily: token("font.display"),
     fontSize: token("font.sizeMd"),
     padding: `${token("space.sm")} ${token("space.lg")}`,
     cursor: disabled ? "default" : "pointer",

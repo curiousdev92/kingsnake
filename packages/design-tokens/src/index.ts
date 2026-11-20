@@ -1,3 +1,5 @@
+import "./fonts.css";
+
 /**
  * The token contract. Components read only these semantic names, never raw values.
  * A theme is one object implementing `Theme`.
@@ -45,27 +47,27 @@ export interface Theme {
 export const themeMono: Theme = {
   name: "mono",
   color: {
-    background: "#000000",
-    surface: "#000000",
-    surfaceRaised: "#111111",
-    border: "#ffffff",
-    text: "#ffffff",
-    textMuted: "#9a9a9a",
-    accent: "#ffffff",
-    textOnAccent: "#000000",
-    danger: "#000000",
+    background: "#ffffff",
+    surface: "#ffffff",
+    surfaceRaised: "#f3f4f6",
+    border: "#111111",
+    text: "#111111",
+    textMuted: "#6b7280",
+    accent: "#111111",
+    textOnAccent: "#ffffff",
+    danger: "#dc2626",
     textOnDanger: "#ffffff",
-    disabled: "#000000",
-    textDisabled: "#5a5a5a",
-    overlay: "rgba(0, 0, 0, 0.7)",
-    track: "#222222",
+    disabled: "#e5e7eb",
+    textDisabled: "#9ca3af",
+    overlay: "rgba(0, 0, 0, 0.45)",
+    track: "#e5e7eb",
   },
   radius: { button: "10px", panel: "14px", chip: "999px" },
   space: { xs: "4px", sm: "8px", md: "12px", lg: "20px", xl: "32px" },
   border: { width: "2px" },
   font: {
-    display: "'Arial Black', 'Helvetica Neue', Arial, sans-serif",
-    body: "'Helvetica Neue', Arial, sans-serif",
+    display: "'Titan One', 'Helvetica Neue', Arial, sans-serif",
+    body: "'Titan One', 'Helvetica Neue', Arial, sans-serif",
     sizeSm: "12px",
     sizeMd: "15px",
     sizeLg: "20px",

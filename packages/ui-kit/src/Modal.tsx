@@ -84,7 +84,6 @@ export function Modal({
           boxSizing: "border-box",
           padding: token("space.lg"),
           color: token("color.text"),
-          fontFamily: token("font.body"),
           outline: "none",
           animation: `snake-pop ${token("motion.pop.duration")} ${token("motion.pop.easing")}`,
           ...frame,
@@ -104,7 +103,6 @@ export function Modal({
             id={titleId}
             style={{
               margin: `0 0 ${token("space.md")}`,
-              fontFamily: token("font.display"),
               fontSize: token("font.sizeLg"),
             }}
           >

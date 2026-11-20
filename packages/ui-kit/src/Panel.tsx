@@ -36,7 +36,6 @@ export function Panel({ variant = "main", selected = false, skin, style, ...rest
       data-state={state}
       style={{
         color: token("color.text"),
-        fontFamily: token("font.body"),
         padding: variant === "inset" ? token("space.md") : token("space.lg"),
         ...look,
         ...style,

@@ -50,7 +50,6 @@ export function Tabs<V extends string>({ items, value, onChange, skin }: TabsPro
             style={{
               flex: 1,
               padding: `${token("space.sm")} ${token("space.md")}`,
-              fontFamily: token("font.display"),
               fontSize: token("font.sizeSm"),
               cursor: "pointer",
               color: token("color.text"),

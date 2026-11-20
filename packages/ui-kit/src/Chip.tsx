@@ -28,7 +28,6 @@ export function Chip({ variant = "default", skin, style, ...rest }: ChipProps) {
         gap: token("space.xs"),
         padding: `${token("space.xs")} ${token("space.md")}`,
         color: token("color.text"),
-        fontFamily: token("font.display"),
         fontSize: token("font.sizeSm"),
         whiteSpace: "nowrap",
         ...look,

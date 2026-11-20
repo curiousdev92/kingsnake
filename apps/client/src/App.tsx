@@ -58,7 +58,7 @@ function Hud() {
         pointerEvents: "none",
       }}
     >
-      <div style={{ fontFamily: token("font.display"), fontSize: token("font.sizeLg") }}>
+      <div style={{ fontSize: token("font.sizeLg") }}>
         {mass}
       </div>
       <div style={{ color: token("color.textMuted"), fontSize: token("font.sizeSm") }}>
@@ -91,7 +91,7 @@ function GameOver({ sandbox }: { sandbox: Sandbox }) {
           gap: token("space.sm"),
         }}
       >
-        <div style={{ fontFamily: token("font.display"), fontSize: token("font.sizeXl") }}>
+        <div style={{ fontSize: token("font.sizeXl") }}>
           {title}
         </div>
         <div style={{ color: token("color.textMuted"), marginBottom: token("space.sm") }}>

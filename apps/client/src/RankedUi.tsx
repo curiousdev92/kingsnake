@@ -272,7 +272,7 @@ function RowShell(p: {
         padding: token("space.sm"),
       }}
     >
-      <b style={{ width: 32, textAlign: "right", fontFamily: token("font.display") }}>{p.rank}</b>
+      <b style={{ width: 32, textAlign: "right" }}>{p.rank}</b>
       {skin && <SkinSwatch skin={skin} size={10} />}
       <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {p.name}

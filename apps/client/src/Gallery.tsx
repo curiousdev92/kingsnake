@@ -67,7 +67,6 @@ export function Gallery() {
         overflow: "auto",
         background: token("color.background"),
         color: token("color.text"),
-        fontFamily: token("font.body"),
       }}
     >
       <div
@@ -89,7 +88,7 @@ export function Gallery() {
           }}
         >
           <h1
-            style={{ margin: 0, fontFamily: token("font.display"), fontSize: token("font.sizeXl") }}
+            style={{ margin: 0, fontSize: token("font.sizeXl") }}
           >
             UI kit
           </h1>

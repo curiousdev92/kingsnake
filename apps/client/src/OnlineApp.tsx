@@ -171,7 +171,6 @@ function Hud() {
       <Panel style={{ padding: token("space.md") }}>
         <div
           style={{
-            fontFamily: token("font.display"),
             fontSize: token("font.sizeLg"),
           }}
         >
@@ -329,7 +328,6 @@ function Center({ children }: { children: ReactNode }) {
 }
 
 const title = {
-  fontFamily: token("font.display"),
   fontSize: token("font.sizeXl"),
 } as const;
 const muted = {
@@ -408,7 +406,6 @@ function PhaseOverlay({ game, onLeave }: { game: OnlineGame | null; onLeave: () 
             <div
               style={{
                 margin: `${token("space.md")} 0`,
-                fontFamily: token("font.display"),
                 fontSize: token("font.sizeLg"),
               }}
             >

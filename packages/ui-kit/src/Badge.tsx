@@ -40,7 +40,6 @@ export function Badge({ count, max = 99, children, skin }: BadgeProps) {
             boxSizing: "border-box",
             display: "grid",
             placeItems: "center",
-            fontFamily: token("font.display"),
             fontSize: 11,
             lineHeight: 1,
             pointerEvents: "none",

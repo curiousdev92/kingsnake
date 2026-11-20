@@ -1,27 +1,62 @@
-import { getIcon, resolveSrc, type IconName } from "@snake/assets";
-import { token } from "@snake/design-tokens";
+import type { IconName } from "@snake/assets";
+import type { LucideIcon } from "lucide-react";
+import {
+  ChartColumn,
+  ChevronLeft,
+  CircleHelp,
+  Clock,
+  Coins,
+  Copy,
+  Crown,
+  Gem,
+  Heart,
+  ListChecks,
+  Play,
+  Settings,
+  Share2,
+  Shield,
+  ShoppingBag,
+  Skull,
+  Smartphone,
+  Star,
+  Trophy,
+  User,
+  Users,
+  Volume2,
+  VolumeX,
+  X,
+  Zap,
+} from "lucide-react";
 
-// Text stand-ins until icon art exists. Anything unlisted shows its first letter.
-const GLYPHS: Partial<Record<IconName, string>> = {
-  "icon.coin": "●",
-  "icon.gem": "◆",
-  "icon.xp": "★",
-  "icon.trophy": "T",
-  "icon.play": "▶",
-  "icon.close": "✕",
-  "icon.back": "‹",
-  "icon.crown": "♛",
-  "icon.skull": "☠",
-  "icon.heart": "♥",
-  "icon.settings": "⚙",
-  "icon.shop": "$",
-  "icon.leaderboard": "≡",
-  "icon.profile": "☺",
-  "icon.clock": "◷",
+const ICONS: Record<IconName, LucideIcon> = {
+  "icon.coin": Coins,
+  "icon.gem": Gem,
+  "icon.xp": Star,
+  "icon.trophy": Trophy,
+  "icon.play": Play,
+  "icon.shop": ShoppingBag,
+  "icon.profile": User,
+  "icon.friends": Users,
+  "icon.missions": ListChecks,
+  "icon.settings": Settings,
+  "icon.leaderboard": ChartColumn,
+  "icon.close": X,
+  "icon.back": ChevronLeft,
+  "icon.copy": Copy,
+  "icon.share": Share2,
+  "icon.sound.on": Volume2,
+  "icon.sound.off": VolumeX,
+  "icon.vibration": Smartphone,
+  "icon.crown": Crown,
+  "icon.skull": Skull,
+  "icon.clock": Clock,
+  "icon.heart": Heart,
+  "icon.speed": Zap,
+  "icon.shield": Shield,
 };
 
 export function fallbackGlyph(name: IconName): string {
-  return GLYPHS[name] ?? name.split(".")[1]!.charAt(0).toUpperCase();
+  return name.split(".")[1]?.charAt(0).toUpperCase() ?? "?";
 }
 
 export interface IconProps {
@@ -31,38 +66,27 @@ export interface IconProps {
   label?: string;
 }
 
-/** An icon from the manifest, or a text glyph in the same box when the art is missing. */
+/** Renders a Lucide icon for the given semantic icon name. */
 export function Icon({ name, size = 20, label }: IconProps) {
-  const src = getIcon(name);
-  const a11y = label ? { role: "img", "aria-label": label } : { "aria-hidden": true };
-  if (src) {
-    return (
-      <img
-        src={resolveSrc(src)}
-        width={size}
-        height={size}
-        alt={label ?? ""}
-        draggable={false}
-        style={{ display: "block" }}
-      />
-    );
-  }
+  const Lucide = ICONS[name] ?? CircleHelp;
+  const a11y = label
+    ? ({ role: "img", "aria-label": label } as const)
+    : ({ "aria-hidden": true } as const);
   return (
     <span
       {...a11y}
-      data-fallback={name}
+      data-icon={name}
       style={{
-        display: "inline-grid",
-        placeItems: "center",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
         width: size,
         height: size,
-        fontSize: size * 0.7,
-        lineHeight: 1,
-        fontFamily: token("font.display"),
         color: "currentColor",
+        flexShrink: 0,
       }}
     >
-      {fallbackGlyph(name)}
+      <Lucide size={Math.round(size * 0.9)} strokeWidth={2.25} absoluteStrokeWidth />
     </span>
   );
 }
