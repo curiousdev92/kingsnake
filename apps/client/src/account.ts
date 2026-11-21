@@ -1,4 +1,9 @@
-import type { Leaderboard, Profile, ScoreBoard, ScoreBoardKind } from "@snake/meta";
+import type {
+  Leaderboard,
+  Profile,
+  ScoreBoard,
+  ScoreBoardKind,
+} from "@snake/meta";
 import { create } from "zustand";
 import { sfx } from "./sound";
 
@@ -14,9 +19,13 @@ export interface AccountState {
   profile: Profile | null;
 }
 
-export const useAccount = create<AccountState>(() => ({ status: "loading", profile: null }));
+export const useAccount = create<AccountState>(() => ({
+  status: "loading",
+  profile: null,
+}));
 
-export const API_URL: string = import.meta.env.VITE_API_URL ?? `http://${location.hostname}:3000`;
+export const API_URL: string =
+  import.meta.env.VITE_API_URL ?? `https://${location.hostname}:3000`;
 
 const TOKEN_KEY = "snake.token";
 const NAME_KEY = "snake.name";
@@ -56,7 +65,11 @@ export class ApiFailure extends Error {
   }
 }
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function call<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<T> {
   const token = sessionToken();
   const res = await fetch(`${API_URL}${path}`, {
     method,
@@ -67,13 +80,21 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(5000),
   });
-  const json = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+  const json = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    message?: string;
+  };
   if (!res.ok)
-    throw new ApiFailure(res.status, json.error ?? "error", json.message ?? `HTTP ${res.status}`);
+    throw new ApiFailure(
+      res.status,
+      json.error ?? "error",
+      json.message ?? `HTTP ${res.status}`,
+    );
   return json as T;
 }
 
-const setProfile = (profile: Profile) => useAccount.setState({ status: "ready", profile });
+const setProfile = (profile: Profile) =>
+  useAccount.setState({ status: "ready", profile });
 
 /** Signs in with the stored token, or creates a guest account. Never throws. */
 export async function initAccount(): Promise<void> {
@@ -84,7 +105,10 @@ export async function initAccount(): Promise<void> {
         return;
       } catch (e) {
         // Token rejected or account gone: start a fresh guest. Anything else is "offline".
-        if (!(e instanceof ApiFailure && (e.status === 401 || e.status === 404))) throw e;
+        if (
+          !(e instanceof ApiFailure && (e.status === 401 || e.status === 404))
+        )
+          throw e;
         storageSet(TOKEN_KEY, null);
       }
     }
@@ -119,7 +143,11 @@ function startSession({ token, profile }: Session): void {
 /** Adds email and password to the current guest, so its progress is kept and can be logged into anywhere. */
 export async function register(email: string, password: string): Promise<void> {
   startSession(
-    await call<Session>("POST", "/auth/register", { email, password, name: savedName() }),
+    await call<Session>("POST", "/auth/register", {
+      email,
+      password,
+      name: savedName(),
+    }),
   );
 }
 
@@ -145,14 +173,20 @@ export async function rename(name: string): Promise<void> {
 }
 
 export async function claimDaily(): Promise<number> {
-  const res = await call<{ coins: number; profile: Profile }>("POST", "/me/daily");
+  const res = await call<{ coins: number; profile: Profile }>(
+    "POST",
+    "/me/daily",
+  );
   setProfile(res.profile);
   sfx("coin");
   return res.coins;
 }
 
 export async function claimSeasonReward(): Promise<number> {
-  const res = await call<{ coins: number; profile: Profile }>("POST", "/me/season-reward");
+  const res = await call<{ coins: number; profile: Profile }>(
+    "POST",
+    "/me/season-reward",
+  );
   setProfile(res.profile);
   sfx("reward");
   return res.coins;
@@ -168,7 +202,9 @@ export async function claimMonthlyPrize(details: string): Promise<void> {
 export function fetchLeaderboard(seasonId?: string): Promise<Leaderboard> {
   return call<Leaderboard>(
     "GET",
-    seasonId ? `/leaderboard?season=${encodeURIComponent(seasonId)}` : "/leaderboard",
+    seasonId
+      ? `/leaderboard?season=${encodeURIComponent(seasonId)}`
+      : "/leaderboard",
   );
 }
 
