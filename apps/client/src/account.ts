@@ -16,7 +16,7 @@ export interface AccountState {
 
 export const useAccount = create<AccountState>(() => ({ status: "loading", profile: null }));
 
-export const API_URL: string = import.meta.env.VITE_API_URL ?? `http://${location.hostname}:3000`;
+export const API_URL = "/api";
 
 const TOKEN_KEY = "snake.token";
 const NAME_KEY = "snake.name";
@@ -58,7 +58,10 @@ export class ApiFailure extends Error {
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const token = sessionToken();
-  const res = await fetch(`${API_URL}${path}`, {
+  const [route = "/", query = ""] = path.split("?", 2);
+  const params = new URLSearchParams(query);
+  params.set("__path", route);
+  const res = await fetch(`${API_URL}?${params.toString()}`, {
     method,
     headers: {
       ...(body !== undefined && { "content-type": "application/json" }),

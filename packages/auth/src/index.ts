@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
 
 /**
@@ -27,7 +28,13 @@ export function authSecret(): string {
 
 /** Shared key for server-to-server calls (game-server -> api `/internal/*`). */
 export function internalKey(): string {
-  return requiredInProduction("INTERNAL_KEY", DEV_INTERNAL_KEY);
+  const configured = process.env.INTERNAL_KEY;
+  if (configured) return configured;
+  if (process.env.NODE_ENV !== "production") return DEV_INTERNAL_KEY;
+
+  return createHmac("sha256", authSecret())
+    .update("snake-arena/internal-key/v1")
+    .digest("hex");
 }
 
 const key = (secret: string) => new TextEncoder().encode(secret);
